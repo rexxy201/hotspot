@@ -29,11 +29,11 @@ $mikrotikParams = [
     <?php if ($settings['event_logo_path']): ?>
       <img class="logo" src="<?= htmlspecialchars($settings['event_logo_path']) ?>" alt="<?= htmlspecialchars($settings['event_name']) ?> logo">
     <?php endif; ?>
-    <h1><?= htmlspecialchars($settings['event_name']) ?></h1>
+    <?php // With a logo present the event name is already visible, so the
+          // heading is hidden visually but kept for screen readers. ?>
+    <h1<?= $settings['event_logo_path'] ? ' class="visually-hidden"' : '' ?>><?= htmlspecialchars($settings['event_name']) ?></h1>
     <p class="tagline"><?= htmlspecialchars($settings['event_tagline']) ?></p>
-    <p class="details"><?= htmlspecialchars($settings['event_dates']) ?> &middot; <?= htmlspecialchars($settings['event_venue']) ?></p>
-
-    <p class="intro">Enter your details to get online. We'll send you a code that also enters you into the prize draw.</p>
+    <p class="details"><?= htmlspecialchars($settings['event_dates']) ?></p>
 
     <form method="POST" action="connect.php" id="connect-form">
       <div class="field">
@@ -52,7 +52,6 @@ $mikrotikParams = [
         <input type="hidden" name="mikrotik_<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars($value) ?>">
       <?php endforeach; ?>
       <button type="submit" id="connect-submit">Connect to Wi-Fi</button>
-      <p class="hint">Your code arrives by email and SMS. Keep it — it's your prize-draw entry.</p>
     </form>
   </div>
 
