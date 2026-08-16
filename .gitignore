@@ -1,0 +1,4 @@
+config.php
+vendor/
+uploads/logos/*
+!uploads/logos/.gitkeep
