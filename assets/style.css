@@ -15,6 +15,16 @@ body {
   text-align: center;
 }
 .logo { max-width: 200px; margin-bottom: 16px; }
+.powered-by {
+  margin-top: 28px;
+  font-size: 12px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.powered-by img { height: 22px; width: auto; }
 input, button {
   width: 100%;
   padding: 12px;
