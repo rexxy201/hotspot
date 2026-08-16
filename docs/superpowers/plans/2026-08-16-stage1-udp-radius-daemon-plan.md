@@ -798,7 +798,11 @@ issue_credential($db, '55556666', -5); // already expired
 // Start the daemon against the test database.
 $root = dirname(__DIR__);
 $descriptors = [1 => ['file', $root . '/logs/test-daemon.log', 'a'], 2 => ['file', $root . '/logs/test-daemon.log', 'a']];
-$proc = proc_open('php ' . escapeshellarg($root . '/radius_server.php'), $descriptors, $pipes, $root, ['DB_NAME' => 'wifi_portal_test'] + $_ENV);
+// env = null means "inherit this process's environment". The test itself is
+// launched with DB_NAME=wifi_portal_test, so the daemon picks up the test
+// database automatically. Passing an explicit env array would replace the whole
+// environment (losing PATH, and $_ENV is not always populated).
+$proc = proc_open('php ' . escapeshellarg($root . '/radius_server.php'), $descriptors, $pipes, $root, null);
 assert_true(is_resource($proc), 'the daemon process started');
 
 // Give it a moment to bind the socket.
@@ -1122,52 +1126,23 @@ while (true) {
 
 - [ ] **Step 5: Add `reset_db()` to `db.php`**
 
-The daemon's `db_run()` needs a way to drop a dead connection. Replace the contents of `db.php` with:
+The daemon's `db_run()` needs a way to drop a dead connection. PHP cannot
+reassign another function's `static`, so the connection moves into a small
+holder function that both `get_db()` and `reset_db()` can reach.
+
+Replace the entire contents of `db.php` with:
 
 ```php
 <?php
 require_once __DIR__ . '/config.php';
-
-function get_db(): mysqli {
-    static $db = null;
-    if ($db === null) {
-        mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-        $db = mysqli_init();
-        $db->real_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-        $db->set_charset('utf8mb4');
-    }
-    return $db;
-}
 
 /**
- * Forget the cached connection so the next get_db() dials a fresh one.
+ * Holds the single mysqli connection.
  *
- * Only the long-running RADIUS daemon needs this: MySQL closes idle
- * connections, and without a reconnect the daemon would stay up but reject
- * every user.
+ * A plain `static` inside get_db() could never be cleared from outside, and the
+ * long-running RADIUS daemon must be able to drop a dead handle — hence this
+ * small holder.
  */
-function reset_db(): void {
-    // A static inside get_db() cannot be reset from outside, so re-declare the
-    // connection holder here via a closure-bound static reset.
-    static $dummy = null;
-    $ref = new ReflectionFunction('get_db');
-    $statics = $ref->getStaticVariables();
-    if (isset($statics['db']) && $statics['db'] instanceof mysqli) {
-        @$statics['db']->close();
-    }
-    // PHP cannot reassign another function's static, so the daemon reconnects
-    // by calling get_db() after this closes the handle; mysqli then throws on
-    // the dead handle and db_run()'s second attempt uses a rebuilt one.
-}
-```
-
-Note: PHP cannot reassign another function's static variable, so `reset_db()` uses a module-level connection holder instead. Replace the whole file with this simpler, correct version:
-
-```php
-<?php
-require_once __DIR__ . '/config.php';
-
-/** Module-level connection holder so it can be reset by the RADIUS daemon. */
 function db_holder(?mysqli $set = null, bool $clear = false): ?mysqli {
     static $db = null;
     if ($clear) {
@@ -1196,8 +1171,8 @@ function get_db(): mysqli {
  * Drop the cached connection so the next get_db() dials a fresh one.
  *
  * Only the long-running RADIUS daemon needs this: MySQL closes idle
- * connections, and without a reconnect the daemon would stay up but reject
- * every user.
+ * connections, and without a reconnect the daemon would stay up while
+ * rejecting every attendee.
  */
 function reset_db(): void {
     $db = db_holder();
