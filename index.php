@@ -25,26 +25,51 @@ $mikrotikParams = [
 </head>
 <body>
 <div class="portal">
-  <?php if ($settings['event_logo_path']): ?>
-    <img class="logo" src="<?= htmlspecialchars($settings['event_logo_path']) ?>" alt="<?= htmlspecialchars($settings['event_name']) ?> logo">
-  <?php endif; ?>
-  <h1><?= htmlspecialchars($settings['event_name']) ?></h1>
-  <p class="tagline"><?= htmlspecialchars($settings['event_tagline']) ?></p>
-  <p class="details"><?= htmlspecialchars($settings['event_dates']) ?> &middot; <?= htmlspecialchars($settings['event_venue']) ?></p>
+  <div class="portal-card">
+    <?php if ($settings['event_logo_path']): ?>
+      <img class="logo" src="<?= htmlspecialchars($settings['event_logo_path']) ?>" alt="<?= htmlspecialchars($settings['event_name']) ?> logo">
+    <?php endif; ?>
+    <h1><?= htmlspecialchars($settings['event_name']) ?></h1>
+    <p class="tagline"><?= htmlspecialchars($settings['event_tagline']) ?></p>
+    <p class="details"><?= htmlspecialchars($settings['event_dates']) ?> &middot; <?= htmlspecialchars($settings['event_venue']) ?></p>
 
-  <form method="POST" action="connect.php" id="connect-form">
-    <input type="text" name="name" placeholder="Full Name" required>
-    <input type="tel" name="phone" placeholder="Phone Number" required>
-    <input type="email" name="email" placeholder="Email Address" required>
-    <?php foreach ($mikrotikParams as $key => $value): ?>
-      <input type="hidden" name="mikrotik_<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars($value) ?>">
-    <?php endforeach; ?>
-    <button type="submit">Connect</button>
-  </form>
+    <p class="intro">Enter your details to get online. We'll send you a code that also enters you into the prize draw.</p>
+
+    <form method="POST" action="connect.php" id="connect-form">
+      <div class="field">
+        <label for="name">Full Name</label>
+        <input type="text" id="name" name="name" autocomplete="name" required>
+      </div>
+      <div class="field">
+        <label for="phone">Phone Number</label>
+        <input type="tel" id="phone" name="phone" autocomplete="tel" inputmode="tel" required>
+      </div>
+      <div class="field">
+        <label for="email">Email Address</label>
+        <input type="email" id="email" name="email" autocomplete="email" inputmode="email" required>
+      </div>
+      <?php foreach ($mikrotikParams as $key => $value): ?>
+        <input type="hidden" name="mikrotik_<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars($value) ?>">
+      <?php endforeach; ?>
+      <button type="submit" id="connect-submit">Connect to Wi-Fi</button>
+      <p class="hint">Your code arrives by email and SMS. Keep it — it's your prize-draw entry.</p>
+    </form>
+  </div>
 
   <?php if ($settings['powered_by_logo_path']): ?>
     <p class="powered-by">Powered by <img src="<?= htmlspecialchars($settings['powered_by_logo_path']) ?>" alt="MangoNet"></p>
   <?php endif; ?>
 </div>
+<script>
+// Give immediate feedback on submit: issuing a code involves email + SMS
+// delivery, so the response is not instant and an unchanged button invites
+// double-taps (which the duplicate-entry handling absorbs, but which look
+// broken to the attendee).
+document.getElementById('connect-form').addEventListener('submit', function () {
+  var btn = document.getElementById('connect-submit');
+  btn.setAttribute('aria-busy', 'true');
+  btn.textContent = 'Connecting…';
+});
+</script>
 </body>
 </html>

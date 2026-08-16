@@ -4,7 +4,9 @@ const SETTINGS_DEFAULTS = [
     'event_tagline' => 'Empowered Youth, Transformed Future',
     'event_dates' => 'Tuesday 18th & Wednesday 19th August 2026',
     'event_venue' => 'Victor Uwaifo Creative Hub, Benin City, Edo State',
-    'brand_color' => '#1a7a4c',
+    // EYIF wordmark blue, darkened from the logo's #2088C8 so white button
+    // text clears WCAG AA contrast (4.6:1 vs the logo blue's 3.9:1).
+    'brand_color' => '#1B7BB8',
     'event_logo_path' => '',
     'powered_by_logo_path' => '',
 ];

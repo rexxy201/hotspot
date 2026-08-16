@@ -31,11 +31,31 @@ $db = get_db();
 
 if (!empty($errors)) {
     http_response_code(422);
-    echo '<h1>Please fix the following:</h1><ul>';
-    foreach ($errors as $error) {
-        echo '<li>' . htmlspecialchars($error) . '</li>';
-    }
-    echo '</ul><p><a href="index.php">Go back</a></p>';
+    $errorSettings = get_settings($db);
+    ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Check your details — <?= htmlspecialchars($errorSettings['event_name']) ?></title>
+<link rel="stylesheet" href="assets/style.css">
+<style>:root { --brand-color: <?= htmlspecialchars($errorSettings['brand_color']) ?>; }</style>
+</head>
+<body>
+<div class="portal">
+  <div class="portal-card">
+    <h1>Check your details</h1>
+    <?php foreach ($errors as $error): ?>
+      <p class="error"><?= htmlspecialchars($error) ?></p>
+    <?php endforeach; ?>
+    <p class="hint">Nothing was submitted — go back and correct the highlighted fields.</p>
+    <p style="margin-top:var(--space-4)"><a class="btn-link" href="index.php">Go back</a></p>
+  </div>
+</div>
+</body>
+</html>
+    <?php
     exit;
 }
 
@@ -94,23 +114,42 @@ $linkLoginOnlyValid = filter_var($linkLoginOnly, FILTER_VALIDATE_URL) !== false
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Connected — <?= htmlspecialchars($settings['event_name']) ?></title>
 <link rel="stylesheet" href="assets/style.css">
+<style>:root { --brand-color: <?= htmlspecialchars($settings['brand_color']) ?>; }</style>
 </head>
 <body>
 <div class="portal">
-  <h1>You're in!</h1>
-  <p>Your code: <strong id="code"><?= htmlspecialchars($code) ?></strong></p>
-  <?php if (!$emailSent): ?><p class="warning">We couldn't email your code — it's shown above, please save it.</p><?php endif; ?>
-  <?php if (!$smsSent): ?><p class="warning">We couldn't text your code — it's shown above, please save it.</p><?php endif; ?>
+  <div class="portal-card">
+    <?php if ($settings['event_logo_path']): ?>
+      <img class="logo" src="<?= htmlspecialchars($settings['event_logo_path']) ?>" alt="<?= htmlspecialchars($settings['event_name']) ?> logo">
+    <?php endif; ?>
+    <svg class="success-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="10"></circle>
+      <path d="m8 12 3 3 5-6"></path>
+    </svg>
+    <h1>You're connected</h1>
+    <p class="code-label">Your code</p>
+    <strong class="code" id="code"><?= htmlspecialchars($code) ?></strong>
+    <p class="hint">Save this code — it's your entry for the prize draw.</p>
 
-  <?php if ($linkLoginOnlyValid): ?>
-    <form id="mikrotik-login" method="POST" action="<?= htmlspecialchars($linkLoginOnly) ?>">
-      <input type="hidden" name="username" value="<?= htmlspecialchars($code) ?>">
-      <input type="hidden" name="password" value="<?= htmlspecialchars($code) ?>">
-      <button type="submit">Continue to internet</button>
-    </form>
-    <script>document.getElementById('mikrotik-login').submit();</script>
+    <?php if (!$emailSent): ?><p class="warning">We couldn't email your code — it's shown above, please save it.</p><?php endif; ?>
+    <?php if (!$smsSent): ?><p class="warning">We couldn't text your code — it's shown above, please save it.</p><?php endif; ?>
+
+    <?php if ($linkLoginOnlyValid): ?>
+      <form id="mikrotik-login" method="POST" action="<?= htmlspecialchars($linkLoginOnly) ?>">
+        <input type="hidden" name="username" value="<?= htmlspecialchars($code) ?>">
+        <input type="hidden" name="password" value="<?= htmlspecialchars($code) ?>">
+        <button type="submit">Continue to internet</button>
+      </form>
+      <script>document.getElementById('mikrotik-login').submit();</script>
+    <?php endif; ?>
+  </div>
+
+  <?php if ($settings['powered_by_logo_path']): ?>
+    <p class="powered-by">Powered by <img src="<?= htmlspecialchars($settings['powered_by_logo_path']) ?>" alt="MangoNet"></p>
   <?php endif; ?>
 </div>
 </body>

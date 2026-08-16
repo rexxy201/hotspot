@@ -29,7 +29,7 @@ INSERT INTO settings (setting_key, setting_value) VALUES
   ('event_tagline', 'Empowered Youth, Transformed Future'),
   ('event_dates', 'Tuesday 18th & Wednesday 19th August 2026'),
   ('event_venue', 'Victor Uwaifo Creative Hub, Benin City, Edo State'),
-  ('brand_color', '#1a7a4c'),
+  ('brand_color', '#1B7BB8'),
   ('event_logo_path', ''),
   ('powered_by_logo_path', '')
 ON DUPLICATE KEY UPDATE setting_key = setting_key;

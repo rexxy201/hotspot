@@ -27,21 +27,47 @@ if (($_GET['export'] ?? '') === 'csv') {
 ?>
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Raffle Entries</title><link rel="stylesheet" href="../assets/style.css"></head>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Raffle Entries</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
 <body>
-<h1>Raffle Entries</h1>
-<p><a href="?export=csv">Download CSV</a> | <a href="settings.php">Branding Settings</a></p>
-<table>
-<tr><th>Name</th><th>Phone</th><th>Email</th><th>Code</th><th>Submitted</th></tr>
-<?php while ($row = $result->fetch_assoc()): ?>
-<tr>
-  <td><?= htmlspecialchars($row['name']) ?></td>
-  <td><?= htmlspecialchars($row['phone']) ?></td>
-  <td><?= htmlspecialchars($row['email']) ?></td>
-  <td><?= htmlspecialchars($row['code']) ?></td>
-  <td><?= htmlspecialchars($row['created_at']) ?></td>
-</tr>
-<?php endwhile; ?>
-</table>
+<div class="admin">
+  <div class="admin-header">
+    <h1>Raffle Entries</h1>
+    <div class="admin-actions">
+      <a class="btn-link secondary" href="settings.php">Branding Settings</a>
+      <a class="btn-link" href="?export=csv">Download CSV</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="count"><?= (int) $result->num_rows ?> <?= $result->num_rows === 1 ? 'entry' : 'entries' ?> so far</p>
+    <?php if ($result->num_rows === 0): ?>
+      <p class="empty">No entries yet. They'll appear here as attendees connect to the Wi-Fi.</p>
+    <?php else: ?>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Phone</th><th>Email</th><th>Code</th><th>Submitted</th></tr>
+          </thead>
+          <tbody>
+          <?php while ($row = $result->fetch_assoc()): ?>
+            <tr>
+              <td><?= htmlspecialchars($row['name']) ?></td>
+              <td><?= htmlspecialchars($row['phone']) ?></td>
+              <td><?= htmlspecialchars($row['email']) ?></td>
+              <td class="code-cell"><?= htmlspecialchars($row['code']) ?></td>
+              <td><?= htmlspecialchars($row['created_at']) ?></td>
+            </tr>
+          <?php endwhile; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+  </div>
+</div>
 </body>
 </html>

@@ -18,15 +18,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ?>
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Admin Login</title><link rel="stylesheet" href="../assets/style.css"></head>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Login</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
 <body>
 <div class="portal">
-<h1>Admin Login</h1>
-<form method="POST">
-  <?php if ($error): ?><p class="error"><?= htmlspecialchars($error) ?></p><?php endif; ?>
-  <input type="password" name="password" placeholder="Admin password" required>
-  <button type="submit">Log in</button>
-</form>
+  <div class="portal-card login-card">
+    <h1>Admin Login</h1>
+    <p class="intro">Sign in to view raffle entries and event branding.</p>
+    <form method="POST">
+      <?php if ($error): ?><p class="error" role="alert"><?= htmlspecialchars($error) ?></p><?php endif; ?>
+      <div class="field">
+        <label for="password">Admin password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required autofocus>
+      </div>
+      <button type="submit">Log in</button>
+    </form>
+  </div>
 </div>
 </body>
 </html>

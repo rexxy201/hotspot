@@ -1,46 +1,453 @@
+/* ==========================================================================
+   EYIF 2026 Wi-Fi Portal — shared styling
+   Style direction: vibrant, block-based (youth event), mobile-first.
+
+   IMPORTANT: no external assets (fonts, CDNs) are referenced anywhere in
+   this file. A captive portal renders BEFORE the attendee has internet
+   access, so any remote request would hang and the page would render
+   unstyled. Everything here is self-contained: system font stack only.
+   ========================================================================== */
+
 :root {
-  --brand-color: #1a7a4c;
+  /* Brand ---------------------------------------------------------------
+     --brand-color is injected per-page from the admin "Brand Color"
+     setting and drives primary actions. Default is the EYIF wordmark blue,
+     darkened to #1B7BB8 so white button text clears WCAG AA (4.6:1); the
+     logo blue #2088C8 only reaches 3.9:1.
+     --color-accent is the EYIF orange, used for emphasis and the code
+     display rather than for text-bearing surfaces (orange cannot reach
+     4.5:1 against white while staying vibrant). */
+  --brand-color: #1B7BB8;
+  --color-accent: #F86800;
+  --color-accent-soft: #FFF1E6;
+  /* The vivid brand orange only reaches 3.0:1 on white, so text uses a
+     darkened variant (5.2:1). --color-accent stays for borders and fills,
+     where the 3:1 non-text threshold applies. */
+  --color-accent-text: #C2410C;
+
+  /* Surfaces & text */
+  --color-bg: #F4F6F8;
+  --color-surface: #FFFFFF;
+  --color-text: #16202A;
+  --color-text-muted: #5A6B7A;
+  /* Dividers stay light; input outlines need 3:1 against the surface to
+     satisfy WCAG 1.4.11 (non-text contrast), so they use a darker token. */
+  --color-border: #DDE3E9;
+  --color-border-strong: #86939F;
+
+  /* Feedback */
+  --color-warning: #92500E;
+  --color-warning-bg: #FFF6E6;
+  --color-danger: #B3261E;
+  --color-danger-bg: #FDECEA;
+  --color-success: #10633C;
+
+  /* Spacing scale (4/8 rhythm) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+
+  --shadow-card: 0 1px 2px rgba(16, 32, 45, .06), 0 12px 32px rgba(16, 32, 45, .08);
+  --shadow-focus: 0 0 0 3px rgba(27, 123, 184, .35);
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --transition: 180ms cubic-bezier(.2, .8, .3, 1);
 }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0E1620;
+    --color-surface: #17222E;
+    --color-text: #EAF0F6;
+    --color-text-muted: #9DB0C0;
+    --color-border: #2A3947;
+    --color-border-strong: #5A6E82;
+    --color-accent-soft: #2A1D12;
+    /* On dark surfaces the vivid orange already clears AA (5.3:1), so the
+       darkened light-mode variant would be needlessly dim here. */
+    --color-accent-text: #F86800;
+    --color-warning: #F0C075;
+    --color-warning-bg: #2C2113;
+    --color-danger: #F2B8B4;
+    --color-danger-bg: #2E1614;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 32px rgba(0, 0, 0, .45);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
 body {
-  font-family: system-ui, sans-serif;
   margin: 0;
-  background: #f4f4f4;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  /* Keep content clear of notches / gesture bars on phones. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
+
+/* --------------------------------------------------------------------------
+   Attendee portal card
+   -------------------------------------------------------------------------- */
+
 .portal {
-  max-width: 480px;
-  margin: 40px auto;
-  padding: 24px;
-  background: #fff;
-  border-radius: 8px;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4) var(--space-7);
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   text-align: center;
 }
-.logo { max-width: 200px; margin-bottom: 16px; }
-.powered-by {
-  margin-top: 28px;
+
+.portal-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-6) var(--space-5);
+  /* The block-based accent bar ties the card to the event branding. */
+  border-top: 5px solid var(--color-accent);
+}
+
+.logo {
+  max-width: 210px;
+  width: 100%;
+  height: auto;
+  margin: 0 auto var(--space-4);
+  display: block;
+}
+
+.portal h1 {
+  margin: 0 0 var(--space-2);
+  font-size: 26px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  margin: 0 0 var(--space-3);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-accent-text);
+}
+
+.details {
+  margin: 0 0 var(--space-5);
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.intro {
+  margin: 0 0 var(--space-4);
+  font-size: 15px;
+  color: var(--color-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Forms
+   -------------------------------------------------------------------------- */
+
+.field {
+  text-align: left;
+  margin-bottom: var(--space-4);
+}
+
+.field label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+input[type="text"],
+input[type="tel"],
+input[type="email"],
+input[type="password"],
+input[type="color"] {
+  width: 100%;
+  /* 46px keeps the tap target above the 44px minimum. */
+  min-height: 46px;
+  padding: var(--space-3);
+  font-family: inherit;
+  font-size: 16px; /* 16px avoids iOS auto-zoom on focus. */
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+input[type="color"] { padding: var(--space-1); height: 46px; cursor: pointer; }
+
+input:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--brand-color);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-focus);
+}
+
+input:focus { border-color: var(--brand-color); }
+
+input[type="file"] {
+  width: 100%;
+  font-size: 14px;
+  color: var(--color-text-muted);
+  padding: var(--space-2) 0;
+}
+
+button {
+  width: 100%;
+  min-height: 50px;
+  padding: var(--space-3) var(--space-4);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--brand-color);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: filter var(--transition), transform var(--transition);
+}
+
+button:hover { filter: brightness(1.08); }
+/* Scale feedback stays within the button's own box so nothing reflows. */
+button:active { transform: scale(.985); }
+
+button[disabled],
+button[aria-busy="true"] {
+  opacity: .6;
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
+
+.hint {
+  margin: var(--space-3) 0 0;
   font-size: 12px;
-  color: #666;
+  color: var(--color-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Success page — the code is the hero element
+   -------------------------------------------------------------------------- */
+
+.code-label {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.code {
+  display: block;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4) var(--space-3);
+  background: var(--color-accent-soft);
+  border: 2px dashed var(--color-accent);
+  border-radius: var(--radius-md);
+  font-size: clamp(30px, 9vw, 42px);
+  font-weight: 800;
+  line-height: 1.1;
+  /* Tabular figures keep the digits evenly spaced and easy to read aloud. */
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .12em;
+  color: var(--color-text);
+  /* Let attendees long-press to copy. */
+  user-select: all;
+}
+
+.success-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto var(--space-3);
+  display: block;
+  color: var(--color-success);
+}
+
+.warning,
+.error {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  text-align: left;
+}
+
+.warning { color: var(--color-warning); background: var(--color-warning-bg); }
+.error { color: var(--color-danger); background: var(--color-danger-bg); }
+
+/* --------------------------------------------------------------------------
+   Powered-by credit
+   -------------------------------------------------------------------------- */
+
+.powered-by {
+  margin: var(--space-6) 0 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-2);
 }
+
 .powered-by img { height: 22px; width: auto; }
-input, button {
-  width: 100%;
-  padding: 12px;
-  margin: 8px 0;
-  box-sizing: border-box;
-  font-size: 16px;
+
+/* --------------------------------------------------------------------------
+   Admin
+   -------------------------------------------------------------------------- */
+
+.admin {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-7);
 }
-button {
-  background: var(--brand-color);
+
+.admin-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.admin h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Link-buttons need an explicit min-height since they have no intrinsic one. */
+.btn-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
   color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+  background: var(--brand-color);
+  transition: filter var(--transition);
 }
-.warning { color: #b45309; }
-.error { color: #b91c1c; }
-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: left; }
-label { display: block; text-align: left; margin: 12px 0; font-size: 14px; }
+
+.btn-link:hover { filter: brightness(1.08); }
+
+.btn-link.secondary {
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid var(--color-border);
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-5);
+}
+
+.count {
+  margin: 0 0 var(--space-4);
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+/* Table scrolls inside its own container so the page never scrolls sideways. */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th, td {
+  padding: var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+th {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  position: sticky;
+  top: 0;
+}
+
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--color-bg); }
+
+/* The raffle code is the column staff read aloud — make it unmistakable. */
+td.code-cell {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--color-accent-text);
+}
+
+.empty {
+  padding: var(--space-7) var(--space-4);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+/* Admin login reuses the centred portal shell. */
+.login-card { max-width: 380px; margin: 0 auto; }
+
+.settings-form .field { margin-bottom: var(--space-5); }
+.settings-form .field-hint {
+  margin: var(--space-1) 0 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+@media (min-width: 640px) {
+  .portal h1 { font-size: 30px; }
+  .admin h1 { font-size: 28px; }
+}
+
+/* Respect users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+  button:active { transform: none; }
+}
