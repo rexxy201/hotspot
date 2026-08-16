@@ -19,9 +19,11 @@ function validate_logo_upload(array $file): array {
     return [true, null, ALLOWED_LOGO_MIME_TYPES[$mime]];
 }
 
-function store_logo_upload(array $file, string $extension, string $uploadsDir): string {
+function store_logo_upload(array $file, string $extension, string $uploadsDir): ?string {
     $filename = bin2hex(random_bytes(16)) . '.' . $extension;
     $destination = rtrim($uploadsDir, '/') . '/' . $filename;
-    move_uploaded_file($file['tmp_name'], $destination);
+    if (!move_uploaded_file($file['tmp_name'], $destination)) {
+        return null;
+    }
     return 'uploads/logos/' . $filename;
 }

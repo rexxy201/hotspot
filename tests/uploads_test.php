@@ -34,6 +34,13 @@ assert_true(!$textOk, 'validate_logo_upload rejects a non-image file even with i
 [$noFileOk] = validate_logo_upload(['error' => UPLOAD_ERR_NO_FILE, 'size' => 0, 'tmp_name' => '']);
 assert_true($noFileOk, 'validate_logo_upload treats "no file uploaded" as valid, since the field is optional');
 
+$fakeUploadResult = store_logo_upload(
+    ['tmp_name' => $tmpPath],
+    'png',
+    sys_get_temp_dir()
+);
+assert_equals(null, $fakeUploadResult, 'store_logo_upload returns null when move_uploaded_file fails (not a genuine upload)');
+
 unlink($tmpPath);
 unlink($textPath);
 test_summary();
