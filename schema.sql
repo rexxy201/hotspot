@@ -12,16 +12,23 @@ CREATE TABLE IF NOT EXISTS settings (
   setting_value TEXT
 );
 
--- Mirrors the radcheck table from FreeRADIUS's own bundled schema
--- (imported for real during production deployment — see deploy/setup.md).
--- Defined here so the app's own database has it for local dev without
--- requiring a full FreeRADIUS install.
-CREATE TABLE IF NOT EXISTS radcheck (
+-- Wi-Fi credentials consumed by radius_server.php (our own UDP RADIUS daemon).
+-- `username` and `password` both hold the attendee's 8-digit code. Deleting a
+-- row revokes Wi-Fi access WITHOUT touching the attendee's `entries` row, which
+-- remains their prize-draw entry.
+CREATE TABLE IF NOT EXISTS wifi_credentials (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  username VARCHAR(64) NOT NULL DEFAULT '',
-  attribute VARCHAR(64) NOT NULL DEFAULT '',
-  op CHAR(2) NOT NULL DEFAULT '==',
-  value VARCHAR(253) NOT NULL DEFAULT ''
+  username VARCHAR(64) NOT NULL,
+  password VARCHAR(64) NOT NULL,
+  -- Reserved for Stage 2 (silent login keyed on device MAC).
+  mac VARCHAR(20) DEFAULT NULL,
+  rate_limit VARCHAR(60) DEFAULT NULL,
+  expires_at DATETIME NOT NULL,
+  last_used_at DATETIME DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_wifi_username (username),
+  KEY idx_wifi_mac (mac),
+  KEY idx_wifi_expires (expires_at)
 );
 
 INSERT INTO settings (setting_key, setting_value) VALUES
