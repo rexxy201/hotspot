@@ -2,3 +2,7 @@ config.php
 vendor/
 uploads/logos/*
 !uploads/logos/.gitkeep
+
+# Local dev server logs
+php_err.log
+php_out.log
