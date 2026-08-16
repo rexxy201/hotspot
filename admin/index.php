@@ -11,7 +11,7 @@ if (($_GET['export'] ?? '') === 'csv') {
     header('Content-Type: text/csv');
     header('Content-Disposition: attachment; filename="entries.csv"');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['Name', 'Phone', 'Email', 'Code', 'Submitted At']);
+    fputcsv($out, ['Name', 'Phone', 'Email', 'Code', 'Submitted At'], ',', '"', '\\');
     while ($row = $result->fetch_assoc()) {
         fputcsv($out, [
             csv_safe_field($row['name']),
@@ -19,7 +19,7 @@ if (($_GET['export'] ?? '') === 'csv') {
             csv_safe_field($row['email']),
             csv_safe_field($row['code']),
             $row['created_at'],
-        ]);
+        ], ',', '"', '\\');
     }
     fclose($out);
     exit;
