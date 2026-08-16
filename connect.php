@@ -48,18 +48,29 @@ try {
         $code = generate_unique_code($db);
         try {
             create_entry($db, $name, $phone, $email, $code);
-            radius_add_user($db, $code);
         } catch (mysqli_sql_exception $e) {
-            // Likely a duplicate-key race: another near-simultaneous
-            // submission with the same email/phone won the insert
-            // (entries.email/entries.phone are UNIQUE). Fall back to the
-            // entry that submission just created.
+            // Only a duplicate-key violation (1062) on entries.email/
+            // entries.phone (both UNIQUE) indicates the intended race:
+            // another near-simultaneous submission with the same email/
+            // phone won the insert. Any other error on create_entry() is
+            // a real failure and must propagate to the outer catch.
+            if ($e->getCode() !== 1062) {
+                throw $e;
+            }
             $existing = find_entry_by_email_or_phone($db, $email, $phone);
             if ($existing === null) {
                 // Unexpected — not actually a duplicate-key collision.
                 throw $e;
             }
             $code = $existing['code'];
+        }
+        if ($existing === null) {
+            // create_entry() succeeded with no race — this is a newly
+            // created entry, so it needs a radcheck row. If this throws,
+            // it propagates straight to the outer catch below (it can
+            // never be a duplicate-key race, since radcheck.username has
+            // no unique constraint).
+            radius_add_user($db, $code);
         }
     } else {
         $code = $existing['code'];
