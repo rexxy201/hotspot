@@ -12,6 +12,18 @@ CREATE TABLE IF NOT EXISTS settings (
   setting_value TEXT
 );
 
+-- Mirrors the radcheck table from FreeRADIUS's own bundled schema
+-- (imported for real during production deployment — see deploy/setup.md).
+-- Defined here so the app's own database has it for local dev without
+-- requiring a full FreeRADIUS install.
+CREATE TABLE IF NOT EXISTS radcheck (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(64) NOT NULL DEFAULT '',
+  attribute VARCHAR(64) NOT NULL DEFAULT '',
+  op CHAR(2) NOT NULL DEFAULT '==',
+  value VARCHAR(253) NOT NULL DEFAULT ''
+);
+
 INSERT INTO settings (setting_key, setting_value) VALUES
   ('event_name', 'Edo Youth Impact Forum 2026'),
   ('event_tagline', 'Empowered Youth, Transformed Future'),

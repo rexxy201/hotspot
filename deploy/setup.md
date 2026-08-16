@@ -30,15 +30,24 @@ mysql -u root wifi_portal < schema.sql
 apt install -y freeradius freeradius-mysql
 ```
 
-Import FreeRADIUS's own bundled SQL schema (do not hand-write this — use the
-one that ships with the package, so it matches what `rlm_sql` expects):
+FreeRADIUS uses the SAME `wifi_portal` database as the PHP app (not a separate
+`radius` database) — `connect.php` inserts into `radcheck` right alongside
+`entries`, using the app's single DB connection, so both must live in one
+place. `schema.sql` already creates a minimal `radcheck` table; importing
+FreeRADIUS's own bundled schema on top of it is still worthwhile because it
+also creates `radreply`, `radacct`, and `nas`, and its `radcheck` definition
+uses `CREATE TABLE IF NOT EXISTS`, so it will safely no-op on the table that
+already exists rather than conflict with it:
 
 ```bash
-mysql -u root -e "CREATE DATABASE radius;"
 mysql -u root -e "CREATE USER 'radius'@'localhost' IDENTIFIED BY '<RADIUS-DB-PASSWORD>';"
-mysql -u root -e "GRANT ALL PRIVILEGES ON radius.* TO 'radius'@'localhost';"
-mysql -u root radius < /etc/freeradius/3.0/mods-config/sql/main/mysql/schema.sql
+mysql -u root -e "GRANT ALL PRIVILEGES ON wifi_portal.* TO 'radius'@'localhost';"
+mysql -u root wifi_portal < /etc/freeradius/3.0/mods-config/sql/main/mysql/schema.sql
 ```
+
+(A dedicated `radius` MySQL user is created here so FreeRADIUS has its own
+credentials, but it's granted against the `wifi_portal` database — the
+database name itself must not be `radius`.)
 
 Edit `/etc/freeradius/3.0/mods-available/sql` with the values in
 `deploy/freeradius/sql.conf.snippet`, then enable the module and the inner-tunnel
@@ -75,7 +84,7 @@ systemctl enable freeradius
 Insert a throwaway test user directly, isolate RADIUS problems from router problems:
 
 ```bash
-mysql -u root radius -e "INSERT INTO radcheck (username, attribute, op, value) VALUES ('12345678', 'Cleartext-Password', ':=', '12345678');"
+mysql -u root wifi_portal -e "INSERT INTO radcheck (username, attribute, op, value) VALUES ('12345678', 'Cleartext-Password', ':=', '12345678');"
 radtest 12345678 12345678 localhost 0 <SHARED-SECRET-FROM-CLIENTS.CONF>
 ```
 
@@ -88,7 +97,7 @@ radtest wrongcode wrongcode localhost 0 <SHARED-SECRET-FROM-CLIENTS.CONF>
 Expected: `Received Access-Reject`. Remove the throwaway row:
 
 ```bash
-mysql -u root radius -e "DELETE FROM radcheck WHERE username = '12345678';"
+mysql -u root wifi_portal -e "DELETE FROM radcheck WHERE username = '12345678';"
 ```
 
 ## 6. Session expiry (end of each event day)
@@ -108,6 +117,18 @@ acceptable fallback for a one-time event.)
 ```bash
 apt install -y php php-mysqli php-curl nginx composer
 ```
+
+Verify the `fileinfo` extension is enabled — `lib/uploads.php`'s
+`mime_content_type()` needs it, and logo uploads will silently fail
+validation without it:
+
+```bash
+php -m | grep fileinfo
+```
+
+In the production `php.ini` / PHP-FPM pool config, set `display_errors = Off`
+and `log_errors = On` so an unhandled exception (even after the try/catch in
+`connect.php`) never leaks a stack trace to attendees' browsers.
 
 Point nginx at the repo's root (`/var/www/wifi-portal`) with PHP-FPM configured
 normally. Copy `config.example.php` to `config.php`, fill in the real DB, SMTP, and
