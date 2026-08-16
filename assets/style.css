@@ -330,38 +330,178 @@ button[aria-busy="true"] {
 .powered-by img { height: 32px; width: auto; }
 
 /* --------------------------------------------------------------------------
-   Admin
+   Admin shell — sidebar + main content
+
+   The admin runs a fixed dark palette rather than following the system
+   theme: it mirrors the existing MangoNet operator dashboards, and the
+   deliberate contrast with the light attendee portal makes it obvious at a
+   glance whether a screen is staff-facing or attendee-facing.
    -------------------------------------------------------------------------- */
 
-.admin {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: var(--space-5) var(--space-4) var(--space-7);
+.admin-body {
+  --admin-bg: #0B1524;
+  --admin-surface: #122033;
+  --admin-surface-2: #17293F;
+  --admin-text: #E8EEF6;
+  --admin-text-muted: #93A7BE;
+  --admin-border: #24384F;
+  --admin-active: #1D4E77;
+  background: var(--admin-bg);
+  color: var(--admin-text);
 }
 
-.admin-header {
+.admin-shell {
+  display: flex;
+  min-height: 100dvh;
+}
+
+.sidebar {
+  flex: 0 0 232px;
+  background: var(--admin-surface);
+  border-right: 1px solid var(--admin-border);
+  padding: var(--space-4) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sidebar-brand { padding: var(--space-2) var(--space-3); }
+
+.sidebar-brand-name {
+  display: block;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--color-accent);
+}
+
+.sidebar-brand-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--admin-text-muted);
+}
+
+.sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /* 44px keeps every nav row a comfortable tap target on tablets. */
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--admin-text-muted);
+  transition: background var(--transition), color var(--transition);
+}
+
+.nav-item:hover { background: var(--admin-surface-2); color: var(--admin-text); }
+
+.nav-item.is-active {
+  background: var(--admin-active);
+  color: #fff;
+  font-weight: 600;
+}
+
+.nav-icon { width: 18px; height: 18px; flex: 0 0 18px; }
+
+.nav-divider {
+  height: 1px;
+  margin: var(--space-3) var(--space-3);
+  background: var(--admin-border);
+}
+
+.nav-item-signout:hover { color: #FFB4AB; }
+
+.admin-main {
+  flex: 1 1 auto;
+  min-width: 0; /* lets wide tables scroll instead of stretching the layout */
+  padding: var(--space-5);
+}
+
+.page-header {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
   margin-bottom: var(--space-5);
 }
 
-.admin h1 {
+.admin-main h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
   letter-spacing: -0.02em;
+  color: var(--admin-text);
 }
 
-.admin-actions {
+.page-sub {
+  margin: var(--space-1) 0 0;
+  font-size: 13px;
+  color: var(--admin-text-muted);
+}
+
+.page-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.stat {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.stat-label {
+  display: block;
+  font-size: 13px;
+  color: var(--admin-text-muted);
+}
+
+.stat-value {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: 30px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.panel {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.panel-header {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
-/* Link-buttons need an explicit min-height since they have no intrinsic one. */
+.panel h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--color-accent);
+}
+
 .btn-link {
   display: inline-flex;
   align-items: center;
@@ -379,23 +519,9 @@ button[aria-busy="true"] {
 .btn-link:hover { filter: brightness(1.08); }
 
 .btn-link.secondary {
-  color: var(--color-text);
+  color: var(--admin-text);
   background: transparent;
-  border: 1px solid var(--color-border);
-}
-
-.card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
-  padding: var(--space-5);
-}
-
-.count {
-  margin: 0 0 var(--space-4);
-  font-size: 14px;
-  color: var(--color-text-muted);
+  border: 1px solid var(--admin-border);
 }
 
 /* Table scrolls inside its own container so the page never scrolls sideways. */
@@ -413,7 +539,7 @@ table {
 th, td {
   padding: var(--space-3);
   text-align: left;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--admin-border);
   white-space: nowrap;
 }
 
@@ -422,38 +548,69 @@ th {
   font-weight: 700;
   letter-spacing: .04em;
   text-transform: uppercase;
-  color: var(--color-text-muted);
-  background: var(--color-bg);
-  position: sticky;
-  top: 0;
+  color: var(--admin-text-muted);
 }
 
 tbody tr:last-child td { border-bottom: none; }
-tbody tr:hover td { background: var(--color-bg); }
+tbody tr:hover td { background: var(--admin-surface-2); }
 
 /* The raffle code is the column staff read aloud — make it unmistakable. */
 td.code-cell {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   letter-spacing: .06em;
-  color: var(--color-accent-text);
+  color: var(--color-accent);
 }
 
 .empty {
   padding: var(--space-7) var(--space-4);
   text-align: center;
-  color: var(--color-text-muted);
+  color: var(--admin-text-muted);
 }
+
+/* Admin form controls sit on dark surfaces. */
+.admin-body .field label { color: var(--admin-text); }
+.admin-body input[type="text"],
+.admin-body input[type="email"],
+.admin-body input[type="tel"],
+.admin-body input[type="color"] {
+  background: var(--admin-bg);
+  color: var(--admin-text);
+  border-color: var(--admin-border);
+}
+.admin-body input[type="file"] { color: var(--admin-text-muted); }
+.admin-body .field-hint { color: var(--admin-text-muted); }
+.admin-body .settings-form { max-width: 560px; }
 
 /* Admin login reuses the centred portal shell. */
 .login-card { max-width: 380px; margin: 0 auto; }
 
 .settings-form .field { margin-bottom: var(--space-5); }
-.admin .field { margin-bottom: var(--space-4); }
+.admin-main .field { margin-bottom: var(--space-4); }
 .settings-form .field-hint {
   margin: var(--space-1) 0 0;
   font-size: 12px;
   color: var(--color-text-muted);
+}
+
+/* Sidebar collapses to a horizontal strip on narrow screens so staff can
+   still use the admin from a phone at the venue. */
+@media (max-width: 720px) {
+  .admin-shell { flex-direction: column; }
+  .sidebar {
+    flex: 0 0 auto;
+    border-right: none;
+    border-bottom: 1px solid var(--admin-border);
+    gap: var(--space-3);
+  }
+  .sidebar-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+  .nav-item { flex: 0 0 auto; }
+  .nav-divider { display: none; }
+  .admin-main { padding: var(--space-4); }
 }
 
 /* Short viewports (small/older phones, or landscape) trade some of the

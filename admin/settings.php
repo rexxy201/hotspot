@@ -3,6 +3,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../lib/settings.php';
 require_once __DIR__ . '/../lib/uploads.php';
+require_once __DIR__ . '/layout.php';
 require_admin_session();
 
 $db = get_db();
@@ -54,24 +55,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Branding Settings</title>
-<link rel="stylesheet" href="../assets/style.css">
-</head>
-<body>
-<div class="admin">
-  <div class="admin-header">
+<?php admin_layout_start('settings.php', 'Branding Settings', $settings); ?>
+<div class="page-header">
+  <div>
     <h1>Branding Settings</h1>
-    <div class="admin-actions">
-      <a class="btn-link secondary" href="index.php">Back to entries</a>
-    </div>
+    <p class="page-sub">Controls how the attendee portal looks. Changes apply immediately.</p>
   </div>
+</div>
 
-  <div class="card">
+  <section class="panel">
     <?php if ($error): ?><p class="error" role="alert"><?= htmlspecialchars($error) ?></p><?php endif; ?>
     <form method="POST" enctype="multipart/form-data" class="settings-form">
       <div class="field">
@@ -107,7 +99,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
       <button type="submit">Save changes</button>
     </form>
-  </div>
-</div>
-</body>
-</html>
+  </section>
+<?php admin_layout_end(); ?>
