@@ -26,7 +26,6 @@ function validate_submission(array $post): array {
 }
 
 $db = get_db();
-$settings = get_settings($db);
 
 [$errors, $name, $phone, $email] = validate_submission($_POST);
 
@@ -40,14 +39,36 @@ if (!empty($errors)) {
     exit;
 }
 
-$existing = find_entry_by_email_or_phone($db, $email, $phone);
+try {
+    $settings = get_settings($db);
 
-if ($existing === null) {
-    $code = generate_unique_code($db);
-    create_entry($db, $name, $phone, $email, $code);
-    radius_add_user($db, $code);
-} else {
-    $code = $existing['code'];
+    $existing = find_entry_by_email_or_phone($db, $email, $phone);
+
+    if ($existing === null) {
+        $code = generate_unique_code($db);
+        try {
+            create_entry($db, $name, $phone, $email, $code);
+            radius_add_user($db, $code);
+        } catch (mysqli_sql_exception $e) {
+            // Likely a duplicate-key race: another near-simultaneous
+            // submission with the same email/phone won the insert
+            // (entries.email/entries.phone are UNIQUE). Fall back to the
+            // entry that submission just created.
+            $existing = find_entry_by_email_or_phone($db, $email, $phone);
+            if ($existing === null) {
+                // Unexpected — not actually a duplicate-key collision.
+                throw $e;
+            }
+            $code = $existing['code'];
+        }
+    } else {
+        $code = $existing['code'];
+    }
+} catch (\Throwable $e) {
+    error_log('connect.php: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+    http_response_code(500);
+    echo '<h1>Something went wrong</h1><p>Please see event staff for help connecting.</p>';
+    exit;
 }
 
 $emailSent = send_code_email(make_smtp_mailer(), $settings, $email, $name, $code);
@@ -55,7 +76,8 @@ $smsSent = send_code_sms('twilio_http_post', $settings, $phone, $code);
 
 $linkLoginOnly = $_POST['mikrotik_link-login-only'] ?? '';
 $linkLoginOnlyValid = filter_var($linkLoginOnly, FILTER_VALIDATE_URL) !== false
-    && in_array(parse_url($linkLoginOnly, PHP_URL_SCHEME), ['http', 'https'], true);
+    && in_array(parse_url($linkLoginOnly, PHP_URL_SCHEME), ['http', 'https'], true)
+    && parse_url($linkLoginOnly, PHP_URL_HOST) === MIKROTIK_GATEWAY_HOST;
 ?>
 <!DOCTYPE html>
 <html lang="en">

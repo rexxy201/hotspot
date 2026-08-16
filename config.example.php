@@ -25,3 +25,9 @@ define('SMTP_FROM_NAME', getenv('SMTP_FROM_NAME') ?: 'EYIF 2026 Wi-Fi');
 define('TWILIO_ACCOUNT_SID', getenv('TWILIO_ACCOUNT_SID') ?: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx');
 define('TWILIO_AUTH_TOKEN', getenv('TWILIO_AUTH_TOKEN') ?: 'change-me');
 define('TWILIO_FROM_NUMBER', getenv('TWILIO_FROM_NUMBER') ?: '+1234567890');
+
+// Mikrotik hotspot gateway — set this to your venue's actual Mikrotik hotspot
+// IP/hostname. connect.php only auto-submits the attendee's RADIUS credential
+// to a `link-login-only` URL whose host exactly matches this value, so a
+// crafted link pointing at an attacker-controlled host is rejected.
+define('MIKROTIK_GATEWAY_HOST', getenv('MIKROTIK_GATEWAY_HOST') ?: '10.5.50.1');
