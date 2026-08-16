@@ -23,4 +23,9 @@ assert_true($fake->sent, 'send_code_email actually calls PHPMailer::send()');
 assert_true(str_contains($fake->Body, '04829371'), 'the email body contains the code');
 assert_equals('Test Event Wi-Fi Code', $fake->Subject, 'the email subject includes the event name');
 
+$maliciousName = '<script>alert(1)</script>';
+$body = build_code_email_body($settings, $maliciousName, '04829371');
+assert_true(str_contains($body, '&lt;script&gt;'), 'build_code_email_body HTML-escapes a malicious name');
+assert_true(!str_contains($body, '<script>alert(1)</script>'), 'build_code_email_body does not output the raw unescaped script tag');
+
 test_summary();
