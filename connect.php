@@ -54,6 +54,8 @@ $emailSent = send_code_email(make_smtp_mailer(), $settings, $email, $name, $code
 $smsSent = send_code_sms('twilio_http_post', $settings, $phone, $code);
 
 $linkLoginOnly = $_POST['mikrotik_link-login-only'] ?? '';
+$linkLoginOnlyValid = filter_var($linkLoginOnly, FILTER_VALIDATE_URL) !== false
+    && in_array(parse_url($linkLoginOnly, PHP_URL_SCHEME), ['http', 'https'], true);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -69,7 +71,7 @@ $linkLoginOnly = $_POST['mikrotik_link-login-only'] ?? '';
   <?php if (!$emailSent): ?><p class="warning">We couldn't email your code — it's shown above, please save it.</p><?php endif; ?>
   <?php if (!$smsSent): ?><p class="warning">We couldn't text your code — it's shown above, please save it.</p><?php endif; ?>
 
-  <?php if ($linkLoginOnly): ?>
+  <?php if ($linkLoginOnlyValid): ?>
     <form id="mikrotik-login" method="POST" action="<?= htmlspecialchars($linkLoginOnly) ?>">
       <input type="hidden" name="username" value="<?= htmlspecialchars($code) ?>">
       <input type="hidden" name="password" value="<?= htmlspecialchars($code) ?>">
