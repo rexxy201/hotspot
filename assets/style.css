@@ -1,0 +1,36 @@
+:root {
+  --brand-color: #1a7a4c;
+}
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  background: #f4f4f4;
+}
+.portal {
+  max-width: 480px;
+  margin: 40px auto;
+  padding: 24px;
+  background: #fff;
+  border-radius: 8px;
+  text-align: center;
+}
+.logo { max-width: 200px; margin-bottom: 16px; }
+input, button {
+  width: 100%;
+  padding: 12px;
+  margin: 8px 0;
+  box-sizing: border-box;
+  font-size: 16px;
+}
+button {
+  background: var(--brand-color);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.warning { color: #b45309; }
+.error { color: #b91c1c; }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: left; }
+label { display: block; text-align: left; margin: 12px 0; font-size: 14px; }
