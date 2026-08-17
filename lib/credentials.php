@@ -29,8 +29,16 @@ function issue_credential(mysqli $db, string $code, int $minutes, ?string $rateL
 /** The credential for $username, or null if missing or expired. */
 function find_valid_credential(mysqli $db, string $username): ?array
 {
+    // `seconds_remaining` is computed by MySQL rather than by the caller because
+    // PHP and the database server do not share a timezone here (PHP runs on UTC,
+    // MySQL on UTC+1). `expires_at` comes back as a bare datetime string with no
+    // offset, so PHP would parse it in *its own* timezone: `strtotime($row['expires_at'])
+    // - time()` silently adds the offset (an hour) to every session. Letting MySQL
+    // subtract two of its own timestamps keeps the arithmetic in one timezone, so
+    // callers (e.g. the RADIUS daemon's Session-Timeout) never have to know about it.
     $stmt = $db->prepare(
-        'SELECT id, username, password, mac, rate_limit, expires_at
+        'SELECT id, username, password, mac, rate_limit, expires_at,
+                TIMESTAMPDIFF(SECOND, NOW(), expires_at) AS seconds_remaining
            FROM wifi_credentials
           WHERE username = ? AND expires_at > NOW()
           LIMIT 1'

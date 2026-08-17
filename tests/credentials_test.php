@@ -14,6 +14,12 @@ assert_true($row !== null, 'find_valid_credential finds a freshly issued credent
 assert_equals('04829371', $row['password'], 'the password is the code itself');
 assert_equals('5M/5M', $row['rate_limit'], 'the rate limit is stored');
 
+// seconds_remaining is computed by MySQL so PHP's differing timezone can never
+// skew it — the daemon consumes this instead of parsing expires_at.
+assert_true(isset($row['seconds_remaining']), 'find_valid_credential returns seconds_remaining');
+assert_true((int) $row['seconds_remaining'] > 3500 && (int) $row['seconds_remaining'] <= 3600,
+    'seconds_remaining reflects the 60-minute credential, not skewed by an hour');
+
 // Re-issuing the same code must replace, not duplicate (UNIQUE on username).
 issue_credential($db, '04829371', 120, '10M/10M');
 $count = $db->query("SELECT COUNT(*) c FROM wifi_credentials WHERE username = '04829371'")->fetch_assoc()['c'];
