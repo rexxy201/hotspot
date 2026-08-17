@@ -142,6 +142,7 @@ Open `https://<your-domain>/admin/`, log in, go to **Wi-Fi & RADIUS**:
 | **Router public IP** | **the router's public IP — required** |
 | Session length | `720` (12 h — one event day) |
 | Speed cap | `5M/5M`, or blank for uncapped |
+| Data limit per code | `0` for unlimited, or e.g. `500` MB |
 | Reconnect known devices | leave ticked |
 
 Save. Then **Branding Settings** → upload the EYIF and MangoNet logos, confirm
@@ -177,7 +178,7 @@ missing, process dead, or nothing bound. Fix that, don't guess.
 ```bash
 ufw allow OpenSSH
 ufw allow 80,443/tcp
-ufw allow from <ROUTER-PUBLIC-IP> to any port 1812 proto udp
+ufw allow from <ROUTER-PUBLIC-IP> to any port 1812,1813 proto udp
 ufw enable
 ```
 
@@ -243,6 +244,8 @@ open on a laptop beside you.
 - [ ] **9.** **Download CSV** and open it. This is your prize-draw list.
 - [ ] **10.** If you set a **Speed cap**, run a speed test on the phone and confirm it is actually capped.
       *Fails →* the cap is not being applied. This was silently broken once before (a wrong Mikrotik attribute number), so verify it rather than assuming.
+- [ ] **11.** After browsing for a minute, **Raffle Entries** shows a non-zero **Data** figure for that code.
+      *Fails →* accounting is off at the router, or UDP 1813 is blocked. The daemon logs `Accounting on UDP` at startup if it is listening.
 
 ---
 
@@ -299,5 +302,5 @@ mysql -u root wifi_portal -e "SELECT COUNT(*) FROM entries;"     # expect 0
 - **Revoking is not instant.** It blocks the next re-authentication; the current session runs to the router's timeout.
 - **A revoked attendee can re-register.** Filling the form again issues a fresh code. There is no permanent block.
 - **Silent reconnect can be spoofed** by someone who already knows a device's MAC. They gain Wi-Fi that is free anyway and can consume that attendee's one session; they cannot claim the prize, which is drawn from the name/phone/email list.
-- **No bandwidth quota yet.** The speed cap limits how fast, not how much.
+- **Data limits are enforced by the router**, using the remaining allowance we send at login. Usage is only as current as the router's interim-update interval, so a device can overshoot slightly before it is cut off.
 - **Codes do not expire at midnight** — they expire `session_length` minutes after issue. A code issued at 4pm on day 1 is valid until 4am.

@@ -232,6 +232,29 @@ always shows the form and rebinds the device to whoever fills it in.
 The bound device is shown next to each code in Raffle Entries, so staff can see
 which entries will reconnect silently.
 
+## Data limits
+
+**Data limit per code (MB)** on the Wi-Fi & RADIUS page caps how much a single
+code may transfer in total. `0` — the default — means unlimited.
+
+How it works: the router reports each session's transfer to the daemon, which
+records it per code. On every login the daemon hands the router the *remaining*
+allowance, so the router disconnects the device itself the instant the limit is
+hit rather than waiting for the next login. A code that is already over its
+limit is refused with "Data limit reached".
+
+Two things to know:
+
+- **Accounting must be on at the router.** The generated config sets
+  `radius-accounting=yes`. If it is off, usage stays at zero and the limit
+  silently never fires — which looks exactly like the feature not working.
+- **Usage accumulates across sessions and across days.** A code that used its
+  whole allowance on day 1 has none left on day 2. Staff can give an allowance
+  back with **Reset data** on the Raffle Entries page; that changes neither the
+  code nor the raffle entry.
+
+Per-code usage is shown in Raffle Entries, and the event total on the Dashboard.
+
 ## Troubleshooting
 
 Everything is visible from the browser — **Admin → RADIUS Log** shows the live
@@ -245,4 +268,5 @@ daemon log, and **Wi-Fi & RADIUS** diagnoses connectivity.
 | `REJECT: wrong password` | Router and portal shared secrets differ. |
 | Daemon alive, nothing answers | Another process holds UDP 1812 — `ss -lunp \| grep 1812` |
 | Admin → RADIUS Log shows nothing | The daemon has not started, or `logs/` is not writable by the web server user — check `bash start_radius.sh status` and the directory ownership set in the permissions step. |
+| Data usage shows 0 for everyone | Accounting is off at the router, or UDP 1813 is blocked — check `radius-accounting=yes` on the hotspot profile; the daemon logs `Accounting on UDP` at startup |
 | A device is not reconnecting silently | Its code expired (expected — it gets the form), silent reconnect is switched off, or the router is not sending `mac` on its redirect. Check the Wi-Fi column in Raffle Entries: no device shown means no MAC was ever recorded. |
