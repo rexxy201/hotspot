@@ -28,6 +28,14 @@ const SETTINGS_SECRET_KEYS = ['radius_secret'];
 
 function setting_encrypt(string $plain): string
 {
+    // Encrypting under the committed placeholder would produce ciphertext that
+    // anyone with the repository can decrypt, and would do so silently. Fail
+    // loudly instead so a missed setup step cannot ship.
+    if (APP_KEY === 'change-me-to-a-64-char-random-hex-string' || APP_KEY === '') {
+        throw new RuntimeException(
+            'APP_KEY is unset or still the placeholder. Generate one with: php -r "echo bin2hex(random_bytes(32));" and set it in config.php'
+        );
+    }
     $key = hash('sha256', APP_KEY, true);
     $iv = random_bytes(16);
     $cipher = openssl_encrypt($plain, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
@@ -41,7 +49,9 @@ function setting_decrypt(string $value): string
         return $value;
     }
     $raw = base64_decode(substr($value, 4), true);
-    if ($raw === false || strlen($raw) < 17) {
+    // A valid payload is a 16-byte IV followed by at least one 16-byte
+    // AES-CBC block, so anything under 32 bytes cannot be genuine ciphertext.
+    if ($raw === false || strlen($raw) < 32) {
         return '';
     }
     $key = hash('sha256', APP_KEY, true);
@@ -77,7 +87,15 @@ function save_settings(mysqli $db, array $settings): void
             continue;
         }
         $value = (string) $settings[$key];
-        if (in_array($key, SETTINGS_SECRET_KEYS, true)) {
+        $isSecret = in_array($key, SETTINGS_SECRET_KEYS, true);
+        // Blank means "keep the current secret", never "erase it". This is the
+        // admin form's semantic, and it also stops a failed decrypt (wrong or
+        // missing APP_KEY, which reads as '') from round-tripping back through
+        // a save and destroying the stored ciphertext.
+        if ($isSecret && $value === '') {
+            continue;
+        }
+        if ($isSecret) {
             $value = setting_encrypt($value);
         }
         $stmt->bind_param('ss', $key, $value);

@@ -33,4 +33,24 @@ $settings = get_settings($db);
 assert_equals('my-radius-secret', $settings['radius_secret'], 'get_settings decrypts secrets transparently');
 assert_equals('Test Event', $settings['event_name'], 'get_settings returns non-secrets unchanged');
 
+// --- failure paths -------------------------------------------------------
+// Corrupt and truncated ciphertexts must degrade to '' rather than warn or
+// return half-decoded bytes.
+assert_equals('', setting_decrypt('enc:!!!not-valid-base64!!!'), 'a non-base64 payload decrypts to an empty string');
+assert_equals('', setting_decrypt('enc:' . base64_encode('too-short')), 'a truncated payload decrypts to an empty string');
+
+// A blank secret must NEVER overwrite a stored one — this is the guard against
+// a failed decrypt (which reads as '') destroying the real secret on save.
+save_settings($db, ['radius_secret' => 'original-secret']);
+save_settings($db, ['radius_secret' => '']);
+assert_equals('original-secret', get_settings($db)['radius_secret'], 'saving a blank secret leaves the stored secret intact');
+
+// A non-blank secret still replaces it.
+save_settings($db, ['radius_secret' => 'replacement-secret']);
+assert_equals('replacement-secret', get_settings($db)['radius_secret'], 'a non-blank secret replaces the stored one');
+
+// Non-secret settings are still allowed to be blanked.
+save_settings($db, ['event_logo_path' => '']);
+assert_equals('', get_settings($db)['event_logo_path'], 'non-secret settings can still be cleared');
+
 test_summary();
