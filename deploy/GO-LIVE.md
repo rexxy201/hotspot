@@ -12,6 +12,14 @@ Two things to have ready before you start:
 - The **router's public IP** (the address the Mikrotik uses to reach the internet). The daemon refuses to start without it.
 - **Real SMTP and Twilio credentials.** Without them attendees still get their code on screen, but not by email or SMS.
 
+> **eyifwifi.online specifically** already runs the automated version of this:
+> a push to `main` deploys via GitHub Actions (`.github/workflows/deploy.yml`)
+> over SSH/rsync, and `/setup.php` — not a hand-edited `config.php` — is what
+> creates `.env` (Phase 3 below is superseded by it: visit `/setup.php`,
+> which prefills from the current `.env` and re-runs safely any time). Phases
+> 1, 2 and 4 below stay accurate as generic instructions for standing this up
+> on a different plain Ubuntu/nginx box from scratch.
+
 ---
 
 ## Phase 1 — Server (30 min)
@@ -67,43 +75,41 @@ Expect `entries`, `settings`, `wifi_credentials`.
 
 ---
 
-## Phase 3 — Secrets (15 min)
+## Phase 3 — Secrets (5 min)
 
-```bash
-php -r "echo bin2hex(random_bytes(32)) . \"\n\";"   # APP_KEY
-php hash_password.php "<a-long-random-admin-password>"
-openssl rand -base64 24 | tr -d '\n'; echo          # RADIUS shared secret
-```
+Visit `/setup.php` in a browser. It's a step-by-step wizard, not a file you
+edit by hand — `config.php` is safe to commit (zero secrets in it) and reads
+everything from `.env`, which only `setup.php` ever writes:
 
-Edit `config.php` (copy from `config.example.php`) and set:
+1. **Database** — host/name/user/password from Phase 2, with a "Test
+   connection" button before you move on.
+2. **Security** — "Generate new key" for `APP_KEY`, and the admin password
+   (this is what `hash_password.php` used to be for — the wizard hashes it
+   for you now).
+3. **Email / SMS** — SMTP and Twilio credentials, each with its own
+   connection/credential test button.
+4. **Network** — the Mikrotik gateway IP, e.g. `10.5.50.1`.
+5. **RADIUS Daemon** — a status check (reuses the same probe as Admin →
+   Wi-Fi & RADIUS), only meaningful after Database is saved once.
+6. **Review & Save** — writes `.env`.
 
-| Key | Value |
-|---|---|
-| `DB_*` | the user from Phase 2 |
-| `APP_KEY` | the 64-char hex above |
-| `ADMIN_PASSWORD_HASH` | the printed bcrypt hash |
-| `SMTP_*` | real mail credentials |
-| `TWILIO_*` | real SMS credentials |
-| `MIKROTIK_GATEWAY_HOST` | hotspot gateway IP, e.g. `10.5.50.1` |
-
-Then `history -c` to clear the plaintext password from your shell history.
+Safe to re-run any time: every field prefills from the current `.env`, and a
+blank password field always means "keep the current one," never "erase it."
 
 > **`APP_KEY` cannot be recovered.** It encrypts the RADIUS secret at rest and
-> lives only in this file, never in the database. Lose it and you re-enter the
-> RADIUS secret. The app refuses to start encrypting under the placeholder value,
-> so a skipped step fails loudly rather than shipping guessable ciphertext.
+> lives only in `.env`, never in the database. Regenerating it (or losing it)
+> means re-entering the RADIUS secret in Admin → Wi-Fi & RADIUS afterward —
+> the wizard warns before it lets you regenerate an existing key. The app
+> refuses to start encrypting under a blank/placeholder key, so a skipped
+> step fails loudly rather than shipping guessable ciphertext.
 >
-> **The RADIUS secret must not contain spaces** — the admin form rejects them,
-> because a space would truncate the router's config line and every login would
-> fail with no visible cause. Strip the trailing newline from `openssl`.
+> **The RADIUS secret must not contain spaces** — set in Admin → Wi-Fi &
+> RADIUS (not `.env`), and the admin form rejects spaces there because one
+> would truncate the router's config line and every login would fail with no
+> visible cause.
 
-**Check:**
-
-```bash
-php -r "require 'config.php'; echo strlen(APP_KEY) . \" char key\n\";"
-```
-
-Expect `64 char key`.
+**Check:** the Database stage's "Test connection" button, and the final
+"Saved!" banner after Review & Save.
 
 ---
 
@@ -112,15 +118,20 @@ Expect `64 char key`.
 Serve `/var/www/wifi-portal` with PHP-FPM. Two rules matter:
 
 ```nginx
-location ~ ^/(config\.php|logs/|\.git|docs/|tests/|schema\.sql|composer\.|start_radius\.sh|hash_password\.php) {
+location ~ ^/(\.env|\.env\..*|deploy_info\.json|config\.php|logs/|\.git|docs/|tests/|schema\.sql|composer\.|start_radius\.sh|hash_password\.php) {
     deny all;
 }
 ```
 
+`.env` is the one that actually matters now — it holds every real credential.
+(`config.php` no longer does; denying it is defence in depth, not a secrets
+leak if you forget it.) See `.htaccess` at the project root for the
+equivalent rule this app ships with by default.
+
 Set `display_errors = Off` and `log_errors = On` in the production `php.ini`, so
 an unexpected error never prints a stack trace to an attendee.
 
-**Check:** the portal loads and `config.php` does not.
+**Check:** the portal loads and `.env`/`config.php` do not.
 
 ```bash
 curl -s -o /dev/null -w "portal:%{http_code}\n" https://<your-domain>/index.php
@@ -251,11 +262,14 @@ open on a laptop beside you.
 
 ## Phase 10 — Clear the decks (5 min)
 
-Test entries must not be in the draw.
+Test entries must not be in the draw. `/setup.php` → Database stage →
+Danger zone → **Erase data** does exactly this (deletes entries, Wi-Fi
+credentials, and RADIUS sessions; keeps branding and RADIUS settings), typed
+confirmation phrase required. Equivalent by hand:
 
 ```bash
 mysql -u root wifi_portal -e "SELECT COUNT(*) FROM entries;"     # look first
-mysql -u root wifi_portal -e "DELETE FROM entries; DELETE FROM wifi_credentials;"
+mysql -u root wifi_portal -e "DELETE FROM entries; DELETE FROM wifi_credentials; DELETE FROM radius_sessions;"
 mysql -u root wifi_portal -e "SELECT COUNT(*) FROM entries;"     # expect 0
 ```
 
