@@ -20,6 +20,10 @@ $db->query('DELETE FROM wifi_credentials');
 save_settings($db, [
     'radius_secret' => $secret,
     'radius_auth_port' => (string) $port,
+    // Pin the accounting port too. Without this the daemon binds whatever the
+    // settings table holds — the 1813 default — which collides with a real
+    // local daemon and fails in a way that looks like a code bug.
+    'radius_acct_port' => '18121',
     // Must be a real address: the daemon refuses to start with this unset,
     // because an unrestricted daemon lets any device brute-force codes over
     // CHAP (which never involves the shared secret). The daemon's loopback
