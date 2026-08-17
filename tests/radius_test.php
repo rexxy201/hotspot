@@ -58,4 +58,9 @@ radius_add_user($db, '70707070', $settings, 'not-a-mac');
 assert_true(find_valid_credential($db, '70707070') !== null, 'a malformed MAC does not prevent issuing a credential');
 assert_equals(null, find_valid_credential_by_mac($db, 'not-a-mac'), 'a malformed MAC is not stored as a lookup key');
 
+// '' is what connect.php actually sends when the router omitted the MAC — the
+// single most common value this parameter takes in production, so pin it.
+radius_add_user($db, '60606060', $settings, '');
+assert_true(find_valid_credential($db, '60606060') !== null, 'an empty MAC still issues a working credential');
+
 test_summary();
