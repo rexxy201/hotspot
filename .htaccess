@@ -1,0 +1,38 @@
+# Deny direct web access to anything that should never be served as a
+# response body: secrets, dotfiles, logs/dumps, and files that only ever
+# run from the CLI or over SSH.
+#
+# This is written as mod_rewrite (RewriteRule ... [F]) rather than the more
+# usual <FilesMatch>/Require all denied, because this app is deployed on
+# OpenLiteSpeed (via CyberPanel): confirmed by hand against the live server
+# that OpenLiteSpeed's .htaccess auto-load only honors the rewrite engine —
+# <FilesMatch>/Require/Order directives are silently ignored, even after a
+# full server restart. RewriteRule is honored. If this project ever moves
+# to real Apache/nginx, RewriteRule ... [F] still works there too, so
+# there's no portability cost to writing it this way.
+#
+# IMPORTANT: OpenLiteSpeed caches whether a directory *has* an .htaccess at
+# all; a brand new .htaccess (or a change to one) isn't picked up by a
+# plain reload, only a full restart. The deploy workflow runs
+# `lswsctrl restart` after every sync for exactly this reason.
+RewriteEngine On
+RewriteCond %{REQUEST_URI} ^/\.env [OR]
+RewriteCond %{REQUEST_URI} ^/\.git [OR]
+RewriteCond %{REQUEST_URI} \.(log|sql)$ [OR]
+RewriteCond %{REQUEST_URI} ^/(config\.php|composer\.(json|lock)|schema\.sql|start_radius\.sh|hash_password\.php|deploy_info\.json)$
+RewriteRule ^ - [F,L]
+
+# Real Apache (not this project's actual host, but kept for portability):
+# the rewrite rule above already covers dotfiles/.git/logs/sql on any
+# server, but FilesMatch gives a second layer where it's actually honored.
+<IfModule mod_authz_core.c>
+    <FilesMatch "^\.env|^\.git|\.(log|sql)$|^(config\.php|composer\.(json|lock)|schema\.sql|start_radius\.sh|hash_password\.php|deploy_info\.json)$">
+        Require all denied
+    </FilesMatch>
+</IfModule>
+
+# No directory listings anywhere under the docroot. (On this project's
+# actual OpenLiteSpeed host, directories with no index file already 404
+# rather than list — verified directly — so this is belt-and-braces for
+# any other host this ever runs on.)
+Options -Indexes

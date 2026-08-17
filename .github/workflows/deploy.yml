@@ -1,0 +1,111 @@
+name: Deploy to Hostinger VPS (SSH/rsync)
+
+# Triggers on every push to main.
+#
+# Secrets required — already set in this repo (Settings -> Secrets -> Actions):
+#   SSH_HOST        — the VPS IP or domain
+#   SSH_USERNAME    — SSH user on the VPS (root, on this VPS)
+#   SSH_PORT        — SSH port (22 on this VPS — NOT Hostinger shared
+#                      hosting's 65002; that port is specific to hPanel
+#                      shared hosting, not a VPS you control)
+#   SSH_PRIVATE_KEY — private half of a repo-dedicated ED25519 keypair
+#   SSH_REMOTE_DIR  — absolute path to the site's docroot, e.g.
+#                      /home/eyifwifi.online/public_html
+#
+# This server runs OpenLiteSpeed (via CyberPanel), confirmed by hand
+# against the live site:
+#   - PHP for this vhost runs as a dedicated non-root user (extUser in the
+#     vhost config), so files rsync'd in as SSH_USERNAME (root) need their
+#     ownership fixed afterward or PHP can't write logs/uploads.
+#   - OpenLiteSpeed's .htaccess auto-load only honors the rewrite engine,
+#     not <FilesMatch>/Require — see .htaccess for why it's written as
+#     RewriteRule. A NEW or CHANGED .htaccess is only picked up by a full
+#     restart, not a reload — hence the restart step below runs every time,
+#     not just when .htaccess changes (it's a graceful restart: in-flight
+#     requests finish on the old workers while new ones spin up).
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP + Composer
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer
+
+      - name: Install PHP dependencies (production only)
+        run: composer install --no-dev --prefer-dist --optimize-autoloader
+
+      - name: Write deploy_info.json
+        run: |
+          echo '{
+            "deployed_at": "'"$(TZ='Africa/Lagos' date +'%Y-%m-%d %H:%M:%S')"'",
+            "timezone":    "Africa/Lagos",
+            "commit_hash": "${{ github.sha }}",
+            "commit_msg":  "'"$(echo "${{ github.event.head_commit.message }}" | head -1 | sed 's/"/'"'"'/g')"'",
+            "pushed_by":   "${{ github.actor }}",
+            "branch":      "${{ github.ref_name }}"
+          }' > deploy_info.json
+
+      - name: Load SSH private key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Ensure server-only directories exist
+        # These are excluded from rsync below (never overwritten/deleted),
+        # so on a first-ever deploy nothing would create them otherwise.
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} \
+            "mkdir -p ${{ secrets.SSH_REMOTE_DIR }}/uploads/logos ${{ secrets.SSH_REMOTE_DIR }}/logs"
+
+      - name: Deploy via rsync over SSH
+        run: |
+          rsync -az --delete \
+            -e "ssh -p ${{ secrets.SSH_PORT }} -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            --exclude='.git*' \
+            --exclude='.github' \
+            --exclude='.claude' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='docs/' \
+            --exclude='tests/' \
+            --exclude='deploy/' \
+            --exclude='uploads/logos/' \
+            --exclude='logs/' \
+            --exclude='*.log' \
+            --exclude='error_log' \
+            --exclude='php-errors.log' \
+            ./ \
+            ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:${{ secrets.SSH_REMOTE_DIR }}/
+
+      - name: Fix ownership and restart OpenLiteSpeed
+        # extUser/extGroup for this vhost (confirmed in
+        # /usr/local/lsws/conf/vhosts/<domain>/vhost.conf) is eyifw6381,
+        # but the group must stay "nobody" — that's the group LiteSpeed's
+        # static-file worker runs as, and chowning the group away from it
+        # (even to the same site user) 403s the entire site regardless of
+        # .htaccess content. Confirmed by hand; do not "simplify" this to
+        # eyifw6381:eyifw6381.
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "
+              chown -R eyifw6381:nobody ${{ secrets.SSH_REMOTE_DIR }} &&
+              find ${{ secrets.SSH_REMOTE_DIR }} -type d -exec chmod 750 {} \; &&
+              find ${{ secrets.SSH_REMOTE_DIR }} -type f -exec chmod 640 {} \; &&
+              find ${{ secrets.SSH_REMOTE_DIR }} -maxdepth 1 -iname 'start_radius.sh' -exec chmod 750 {} \; &&
+              /usr/local/lsws/bin/lswsctrl restart
+            "
