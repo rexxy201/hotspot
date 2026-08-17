@@ -16,3 +16,6 @@ graphify-out/
 
 # Local editor/tooling config, not part of the deployable app.
 .claude/
+
+# macOS Finder metadata
+.DS_Store
