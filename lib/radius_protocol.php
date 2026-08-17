@@ -60,12 +60,24 @@ function radius_parse_attributes(string $data): array
 /** Encode one attribute: type, total length, value. */
 function radius_encode_attr(int $type, string $value): string
 {
+    // The length field is a single byte covering the 2-byte header too, so the
+    // value cannot exceed 253. Past that chr() wraps modulo 256 and silently
+    // emits a nonsense length (254 bytes -> 0), leaving a packet whose outer
+    // length disagrees with its attributes — the router just drops it. A
+    // shortened Reply-Message is far more useful than a discarded reply, so
+    // truncate here rather than reject.
+    $value = substr($value, 0, 253);
     return chr($type) . chr(2 + strlen($value)) . $value;
 }
 
 /** Encode a vendor-specific attribute, wrapped in attribute 26. */
 function radius_encode_vsa(int $vendor, int $subType, string $value): string
 {
+    // Same single-byte length trap one level in: the inner value shares the
+    // 255-byte attribute budget with the 4-byte vendor id, the sub-type and
+    // sub-length bytes and the outer 2-byte header, leaving 247. Beyond that
+    // chr() wraps and corrupts the sub-length, so truncate before packing.
+    $value = substr($value, 0, 247);
     $inner = pack('N', $vendor) . chr($subType) . chr(2 + strlen($value)) . $value;
     return radius_encode_attr(R_ATTR_VENDOR_SPECIFIC, $inner);
 }

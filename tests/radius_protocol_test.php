@@ -56,4 +56,20 @@ assert_equals(strlen($reply), unpack('n', substr($reply, 2, 2))[1], 'the declare
 $expectedAuth = md5(substr($reply, 0, 4) . $auth . substr($reply, 20) . $secret, true);
 assert_equals($expectedAuth, substr($reply, 4, 16), 'the response authenticator is MD5(code+id+len+reqauth+attrs+secret)');
 
+// --- oversized values must be capped, not silently wrapped ----------------
+// A single-byte length field caps an attribute value at 253 bytes; chr() would
+// wrap modulo 256 and emit a corrupt length, so encoding must truncate.
+$huge = str_repeat('A', 400);
+$capped = radius_encode_attr(R_ATTR_REPLY_MESSAGE, $huge);
+assert_equals(255, strlen($capped), 'an oversized attribute is capped at the 255-byte maximum');
+assert_equals(255, ord($capped[1]), 'the capped attribute declares a valid length byte');
+$reparsed = radius_parse_attributes($capped);
+assert_equals(253, strlen($reparsed[R_ATTR_REPLY_MESSAGE]), 'the capped attribute round-trips through the parser');
+
+$hugeVsa = radius_encode_vsa(VENDOR_MIKROTIK, MT_RATE_LIMIT, $huge);
+assert_equals(255, strlen($hugeVsa), 'an oversized VSA is capped at the 255-byte maximum');
+assert_equals(255, ord($hugeVsa[1]), 'the capped VSA declares a valid outer length byte');
+$vsaInner = radius_parse_attributes($hugeVsa)[R_ATTR_VENDOR_SPECIFIC];
+assert_equals(247, strlen(substr($vsaInner, 6)), 'the capped VSA inner value is truncated to 247 bytes');
+
 test_summary();
