@@ -2,6 +2,7 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../lib/settings.php';
+require_once __DIR__ . '/../lib/csrf.php';
 require_once __DIR__ . '/layout.php';
 require_admin_session();
 
@@ -40,7 +41,9 @@ if (($_GET['raw'] ?? '') === '1') {
 $notice = '';
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_verify()) {
+    $error = 'That form had expired — nothing was changed. Please try again.';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'restart') {
@@ -108,11 +111,13 @@ admin_layout_start('radius-log.php', 'RADIUS Log', $settings);
   </div>
   <div class="page-actions">
     <form method="POST" style="display:inline">
+      <?= csrf_field() ?>
       <input type="hidden" name="action" value="restart">
       <button type="submit" class="btn-inline">Restart daemon</button>
     </form>
     <form method="POST" style="display:inline"
           onsubmit="return confirm('Clear the log file? This cannot be undone.')">
+      <?= csrf_field() ?>
       <input type="hidden" name="action" value="clear">
       <button type="submit" class="btn-inline secondary">Clear log</button>
     </form>
@@ -130,6 +135,7 @@ admin_layout_start('radius-log.php', 'RADIUS Log', $settings);
       which is not the trusted router IP. If that is your router, trust it:
     </p>
     <form method="POST">
+      <?= csrf_field() ?>
       <input type="hidden" name="action" value="trust_ip">
       <input type="hidden" name="ip" value="<?= htmlspecialchars($suggestIp, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
       <button type="submit" class="btn-inline">Trust <?= htmlspecialchars($suggestIp, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></button>

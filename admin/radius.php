@@ -5,6 +5,7 @@ require_once __DIR__ . '/../lib/settings.php';
 require_once __DIR__ . '/../lib/credentials.php';
 require_once __DIR__ . '/../lib/radius_protocol.php';
 require_once __DIR__ . '/../lib/radius_diagnostics.php';
+require_once __DIR__ . '/../lib/csrf.php';
 require_once __DIR__ . '/layout.php';
 require_admin_session();
 
@@ -44,7 +45,9 @@ if (($_GET['download'] ?? '') === 'rsc') {
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_verify()) {
+    $error = 'That form had expired — nothing was saved. Please try again.';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $typedSecret = trim((string) ($_POST['radius_secret'] ?? ''));
     if ($typedSecret !== '' && preg_match('/[\s\x00-\x1F]/', $typedSecret) === 1) {
         // The secret is written into a RouterOS config line; whitespace would
@@ -97,6 +100,7 @@ admin_layout_start('radius.php', 'Wi-Fi & RADIUS', $settings);
 <section class="panel">
   <div class="panel-header"><h2>Settings</h2></div>
   <form method="POST" class="settings-form">
+    <?= csrf_field() ?>
     <div class="field">
       <label for="radius_secret">Shared secret</label>
       <input type="text" id="radius_secret" name="radius_secret"

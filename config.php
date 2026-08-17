@@ -54,3 +54,10 @@ define('MIKROTIK_GATEWAY_HOST', getenv('MIKROTIK_GATEWAY_HOST') ?: '');
 
 // App-level toggles read directly by setup.php / security middleware.
 define('COMPANY_NAME', getenv('COMPANY_NAME') ?: 'MangoNet');
+
+// Short PIN that unlocks setup.php on a re-run, instead of the full admin
+// password — deliberately separate from ADMIN_PASSWORD_HASH so setup.php
+// doesn't need a trip through /admin/ to reach. Rate-limited in setup.php
+// itself (see lib/rate_limit.php) because a short PIN is easy to brute-force
+// otherwise, and this page can rewrite DB credentials and drop every table.
+define('SETUP_ACCESS_CODE', getenv('SETUP_ACCESS_CODE') ?: '2112');

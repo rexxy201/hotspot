@@ -7,12 +7,16 @@
  *
  * Auth model: the very first run (no .env yet) is open — there is nothing
  * to protect yet, and no admin password exists to gate it with anyway.
- * Every run after that requires an active admin session, exactly like the
- * rest of /admin, because from here on this page can rewrite DB/SMTP/
+ * Every run after that requires SETUP_ACCESS_CODE (a short PIN, default
+ * 2112, changeable from the Security stage) — deliberately separate from
+ * the admin password so this is reachable without a trip through /admin/.
+ * Rate-limited (lib/rate_limit.php) since a short PIN is easy to
+ * brute-force otherwise, and from here on this page can rewrite DB/SMTP/
  * Twilio credentials and drop every table.
  */
 
 require_once __DIR__ . '/lib/env.php';
+require_once __DIR__ . '/lib/csrf.php';
 
 $envPath = __DIR__ . '/.env';
 $envExisted = is_file($envPath);
@@ -63,6 +67,7 @@ function write_env_file(string $path, array $values): bool
         'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM_NUMBER',
         'MIKROTIK_GATEWAY_HOST',
         'COMPANY_NAME',
+        'SETUP_ACCESS_CODE',
     ];
     $lines = ['# Written by setup.php — do not edit by hand while the wizard is in use;', '# re-run the wizard instead so nothing here gets out of sync.'];
     foreach ($order as $key) {
@@ -189,15 +194,71 @@ function check_daemon(array $envValues): array
 }
 
 // ---------------------------------------------------------------------
-// Auth gate for re-runs (see file header).
+// Access gate for re-runs — a short PIN (SETUP_ACCESS_CODE), not the admin
+// password, so this is reachable without a trip through /admin/. Rate
+// limited: a short PIN is easy to brute-force otherwise, and from here on
+// this page can rewrite DB/SMTP/Twilio credentials and drop every table.
 // ---------------------------------------------------------------------
 if ($envExisted) {
+    require_once __DIR__ . '/lib/rate_limit.php';
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
-    if (empty($_SESSION['is_admin'])) {
-        header('Location: admin/login.php?next=' . urlencode('/setup.php'));
-        exit;
+
+    $unlockError = '';
+    if (empty($_SESSION['setup_unlocked'])) {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'unlock' && !csrf_verify()) {
+            $unlockError = 'That form had expired. Please try again.';
+        } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'unlock') {
+            $ip = client_ip();
+            if (!rate_limit_check('setup_unlock', $ip, 5, 900)) {
+                $wait = (int) ceil(rate_limit_seconds_until_retry('setup_unlock', $ip, 900) / 60);
+                $unlockError = "Too many attempts. Try again in {$wait} minute(s).";
+            } else {
+                $typed = (string) ($_POST['code'] ?? '');
+                $expected = ($current['SETUP_ACCESS_CODE'] ?? '') !== '' ? $current['SETUP_ACCESS_CODE'] : '2112';
+                if ($typed !== '' && hash_equals($expected, $typed)) {
+                    $_SESSION['setup_unlocked'] = true;
+                    rate_limit_reset('setup_unlock', $ip);
+                } else {
+                    rate_limit_record('setup_unlock', $ip);
+                    $unlockError = 'Incorrect code.';
+                }
+            }
+        }
+
+        if (empty($_SESSION['setup_unlocked'])) {
+            ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Setup — Locked</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="portal">
+  <div class="portal-card login-card">
+    <h1>Setup is locked</h1>
+    <p class="intro">Enter the access code to re-run setup.</p>
+    <form method="POST">
+      <?= csrf_field() ?>
+      <input type="hidden" name="action" value="unlock">
+      <?php if ($unlockError): ?><p class="error" role="alert"><?= htmlspecialchars($unlockError) ?></p><?php endif; ?>
+      <div class="field">
+        <label for="code">Access code</label>
+        <input type="text" id="code" name="code" inputmode="numeric" autocomplete="off" required autofocus>
+      </div>
+      <button type="submit">Unlock</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>
+            <?php
+            exit;
+        }
     }
 }
 
@@ -242,7 +303,9 @@ if (($_GET['ajax'] ?? '') !== '') {
 // ---------------------------------------------------------------------
 $dangerNotice = '';
 $dangerError = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['danger_action'] ?? '', ['drop_recreate', 'erase_data'], true)) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['danger_action'] ?? '', ['drop_recreate', 'erase_data'], true) && !csrf_verify()) {
+    $dangerError = 'That form had expired — nothing was touched. Please try again.';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['danger_action'] ?? '', ['drop_recreate', 'erase_data'], true)) {
     $dangerAction = $_POST['danger_action'];
     $expected = $dangerAction === 'drop_recreate' ? 'DROP EVERYTHING' : 'ERASE DATA';
     $typed = trim((string) ($_POST['confirm_phrase'] ?? ''));
@@ -303,7 +366,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['danger_action'] ??
 // ---------------------------------------------------------------------
 $saveNotice = '';
 $saveError = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save' && !csrf_verify()) {
+    $saveError = 'That form had expired — nothing was saved. Please try again.';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save') {
     $newAdminPassword = (string) ($_POST['admin_password'] ?? '');
     $adminHash = $current['ADMIN_PASSWORD_HASH'] ?? '';
     if ($newAdminPassword !== '') {
@@ -330,6 +395,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         'TWILIO_FROM_NUMBER' => trim((string) ($_POST['TWILIO_FROM_NUMBER'] ?? '')),
         'MIKROTIK_GATEWAY_HOST' => trim((string) ($_POST['MIKROTIK_GATEWAY_HOST'] ?? '')),
         'COMPANY_NAME' => trim((string) ($_POST['COMPANY_NAME'] ?? '')) ?: 'MangoNet',
+        'SETUP_ACCESS_CODE' => trim((string) ($_POST['SETUP_ACCESS_CODE'] ?? '')) ?: ($current['SETUP_ACCESS_CODE'] ?? '2112'),
     ];
 
     $errors = [];
@@ -416,6 +482,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
   </div>
 
   <form method="POST" id="setup-form" class="settings-form">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="save">
 
     <section class="setup-stage is-active" data-stage="db">
@@ -459,6 +526,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         <input type="password" id="admin_password" name="admin_password" autocomplete="new-password"
                placeholder="<?= $envExisted ? 'Leave blank to keep the current password' : 'Choose a strong password' ?>">
         <p class="field-hint">This is what logs into /admin/. <?= $envExisted ? 'Leave blank to keep the current one.' : '' ?></p>
+      </div>
+      <div class="field" style="margin-top:var(--space-5)">
+        <label for="SETUP_ACCESS_CODE">Setup access code</label>
+        <input type="text" id="SETUP_ACCESS_CODE" name="SETUP_ACCESS_CODE" inputmode="numeric" autocomplete="off"
+               value="<?= htmlspecialchars($current['SETUP_ACCESS_CODE'] ?? '') ?>" placeholder="Default: 2112">
+        <p class="field-hint">The short code that unlocks this page on a re-run, instead of the admin password above. Change it here any time — leave blank to keep the current one.</p>
       </div>
     </section>
 
@@ -535,6 +608,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
     <p>Both actions run against whatever is currently typed in the Database fields above — test the connection first. Both require the exact confirmation phrase; nothing happens if it doesn't match.</p>
     <p><strong>Erase data</strong> — deletes raffle entries, Wi-Fi credentials, and RADIUS sessions. Branding and RADIUS settings are kept. Type <code>ERASE DATA</code> to confirm.</p>
     <form method="POST" class="danger-form" onsubmit="return document.getElementById('confirm-erase').value === 'ERASE DATA' || confirm('Confirmation phrase does not match yet — submit anyway and let the server reject it?');">
+      <?= csrf_field() ?>
       <input type="hidden" name="danger_action" value="erase_data">
       <input type="hidden" name="DB_HOST" class="mirror-DB_HOST"><input type="hidden" name="DB_NAME" class="mirror-DB_NAME">
       <input type="hidden" name="DB_USER" class="mirror-DB_USER"><input type="hidden" name="DB_PASS" class="mirror-DB_PASS">
@@ -543,6 +617,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
     </form>
     <p style="margin-top:var(--space-3)"><strong>Drop &amp; recreate all tables</strong> — wipes absolutely everything, including settings, and rebuilds a blank schema from schema.sql. Type <code>DROP EVERYTHING</code> to confirm.</p>
     <form method="POST" class="danger-form" onsubmit="return document.getElementById('confirm-drop').value === 'DROP EVERYTHING' || confirm('Confirmation phrase does not match yet — submit anyway and let the server reject it?');">
+      <?= csrf_field() ?>
       <input type="hidden" name="danger_action" value="drop_recreate">
       <input type="hidden" name="DB_HOST" class="mirror-DB_HOST"><input type="hidden" name="DB_NAME" class="mirror-DB_NAME">
       <input type="hidden" name="DB_USER" class="mirror-DB_USER"><input type="hidden" name="DB_PASS" class="mirror-DB_PASS">
