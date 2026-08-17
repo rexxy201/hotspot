@@ -9,12 +9,12 @@
 
 # 1) Point the router at our RADIUS daemon.
 :if ([:len [/radius find where address=__VPS_IP__]] = 0) do={
-  /radius add service=hotspot address=__VPS_IP__ secret=__RADIUS_SECRET__ \
+  /radius add service=hotspot address=__VPS_IP__ secret="__RADIUS_SECRET__" \
     authentication-port=__AUTH_PORT__ accounting-port=1813 timeout=3s
   :put "  + RADIUS server added"
 } else={
   /radius set [find where address=__VPS_IP__] service=hotspot \
-    secret=__RADIUS_SECRET__ authentication-port=__AUTH_PORT__ \
+    secret="__RADIUS_SECRET__" authentication-port=__AUTH_PORT__ \
     accounting-port=1813 timeout=3s
   :put "  ~ RADIUS server updated"
 }

@@ -72,7 +72,14 @@ $notice = '';
 // Download the router config as a .rsc file.
 if (($_GET['download'] ?? '') === 'rsc') {
     $template = (string) file_get_contents(dirname(__DIR__) . '/deploy/mikrotik-setup.rsc');
-    $portalHost = $_SERVER['HTTP_HOST'] ?? 'your-portal-domain';
+    // HTTP_HOST is client-supplied and lands inside a quoted RouterOS string
+    // that the admin pastes into a router shell. Anything but a plain
+    // host[:port] is rejected rather than escaped, so a crafted Host header
+    // cannot close the quote and append commands.
+    $rawHost = (string) ($_SERVER['HTTP_HOST'] ?? '');
+    $portalHost = preg_match('/^[A-Za-z0-9.\-]+(:\d+)?$/', $rawHost) === 1
+        ? $rawHost
+        : 'your-portal-domain';
     $out = strtr($template, [
         '__RADIUS_SECRET__' => (string) $settings['radius_secret'],
         '__VPS_IP__' => (string) ($_SERVER['SERVER_ADDR'] ?? 'YOUR_SERVER_IP'),
@@ -82,26 +89,34 @@ if (($_GET['download'] ?? '') === 'rsc') {
     ]);
     header('Content-Type: text/plain; charset=utf-8');
     header('Content-Disposition: attachment; filename="eyif-radius.rsc"');
+    // The body contains the plaintext shared secret — keep it out of caches.
+    header('Cache-Control: no-store, private');
     echo $out;
     exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $newSettings = [
-        'radius_auth_port' => (string) max(1, (int) ($_POST['radius_auth_port'] ?? 1812)),
-        'radius_nas_ip' => trim((string) ($_POST['radius_nas_ip'] ?? '')),
-        'session_minutes' => (string) max(1, (int) ($_POST['session_minutes'] ?? 720)),
-        'rate_limit' => trim((string) ($_POST['rate_limit'] ?? '')),
-    ];
-    // Only overwrite the secret when a new one was actually typed, so saving
-    // the form does not wipe it.
     $typedSecret = trim((string) ($_POST['radius_secret'] ?? ''));
-    if ($typedSecret !== '') {
-        $newSettings['radius_secret'] = $typedSecret;
+    if ($typedSecret !== '' && preg_match('/[\s\x00-\x1F]/', $typedSecret) === 1) {
+        // The secret is written into a RouterOS config line; whitespace would
+        // truncate it there and a control character could break out of it.
+        $error = 'The shared secret cannot contain spaces, tabs or line breaks. Generate one with: openssl rand -base64 24 (then remove any trailing newline).';
+    } else {
+        $newSettings = [
+            'radius_auth_port' => (string) max(1, (int) ($_POST['radius_auth_port'] ?? 1812)),
+            'radius_nas_ip' => trim((string) ($_POST['radius_nas_ip'] ?? '')),
+            'session_minutes' => (string) max(1, (int) ($_POST['session_minutes'] ?? 720)),
+            'rate_limit' => trim((string) ($_POST['rate_limit'] ?? '')),
+        ];
+        // Only overwrite the secret when a new one was actually typed, so saving
+        // the form does not wipe it.
+        if ($typedSecret !== '') {
+            $newSettings['radius_secret'] = $typedSecret;
+        }
+        save_settings($db, $newSettings);
+        $settings = get_settings($db);
+        $notice = 'RADIUS settings saved. Restart the daemon from the RADIUS Log page for the new port to take effect.';
     }
-    save_settings($db, $newSettings);
-    $settings = get_settings($db);
-    $notice = 'RADIUS settings saved. Restart the daemon from the RADIUS Log page for the new port to take effect.';
 }
 
 [$diagOk, $diagMessage] = radius_diagnose($settings);
