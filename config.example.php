@@ -10,6 +10,13 @@ define('DB_NAME', getenv('DB_NAME') ?: 'wifi_portal');
 define('DB_USER', getenv('DB_USER') ?: 'wifi_portal_user');
 define('DB_PASS', getenv('DB_PASS') ?: 'change-me');
 
+// Encryption key for secrets stored in the settings table (RADIUS shared
+// secret, SMTP password, Twilio token). Generate a fresh one per install:
+//   php -r "echo bin2hex(random_bytes(32));"
+// Keep this in this file only — never in the database, or encrypting the
+// database values would be pointless.
+define('APP_KEY', getenv('APP_KEY') ?: 'change-me-to-a-64-char-random-hex-string');
+
 // Admin login — generate with: php hash_password.php "your-strong-password"
 define('ADMIN_PASSWORD_HASH', getenv('ADMIN_PASSWORD_HASH') ?: '$2y$10$replace-with-generated-hash');
 
