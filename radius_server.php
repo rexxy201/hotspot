@@ -394,6 +394,36 @@ while (true) {
                 continue;
             }
 
+            // Data quota. 0 means unlimited.
+            //
+            // NOTE: the byte allowance is deliberately NOT called $remaining —
+            // that name already holds the credential's seconds_remaining a few
+            // lines below, and reusing it would silently send the router a
+            // session length as a byte limit.
+            $quotaMb = (int) ($settings['data_quota_mb'] ?? 0);
+            $quotaBytes = $quotaMb * 1048576;
+            $quotaRemaining = 0;
+
+            if ($quotaBytes > 0) {
+                try {
+                    $used = db_run(fn(mysqli $d) => usage_bytes_for_code($d, $username));
+                } catch (Throwable $e) {
+                    // A usage lookup failure must not lock a paying attendee out, so
+                    // fail open on the quota specifically — the credential itself has
+                    // already been verified above.
+                    radius_log('Could not read usage, allowing: ' . $e->getMessage());
+                    $used = 0;
+                }
+                $quotaRemaining = $quotaBytes - $used;
+                if ($quotaRemaining <= 0) {
+                    radius_log('REJECT ' . radius_log_safe($username) . ': data quota exhausted');
+                    $reply = radius_build_reply(R_ACCESS_REJECT, $identifier, $requestAuth, $secret,
+                        radius_encode_attr(R_ATTR_REPLY_MESSAGE, 'Data limit reached'));
+                    socket_sendto($active, $reply, strlen($reply), 0, $from, $fromPort);
+                    continue;
+                }
+            }
+
             // Seconds left on this credential.
             //
             // MUST come from the SQL-computed seconds_remaining, never from
@@ -415,6 +445,24 @@ while (true) {
             }
             if ($rate !== '') {
                 $replyAttrs .= radius_encode_vsa(VENDOR_MIKROTIK, MT_RATE_LIMIT, $rate);
+            }
+
+            if ($quotaBytes > 0) {
+                // Hand the router the REMAINING allowance so it disconnects the device
+                // itself the moment the limit is hit, rather than the session running
+                // on until the next login attempt.
+                //
+                // This must stay the LAST Mikrotik VSA appended: every Mikrotik VSA
+                // rides inside attribute 26, and radius_parse_attributes() keeps only
+                // the last of a repeated type — tests/radius_quota_test.php reads the
+                // total limit that way.
+                $replyAttrs .= radius_encode_vsa(VENDOR_MIKROTIK, MT_TOTAL_LIMIT, pack('N', $quotaRemaining % 4294967296));
+                if ($quotaRemaining >= 4294967296) {
+                    // Over 4GB the limit needs its own gigawords companion, for the
+                    // same reason the counters do.
+                    $replyAttrs .= radius_encode_vsa(VENDOR_MIKROTIK, MT_TOTAL_LIMIT_GIGAWORDS,
+                        pack('N', intdiv($quotaRemaining, 4294967296)));
+                }
             }
 
             $reply = radius_build_reply(R_ACCESS_ACCEPT, $identifier, $requestAuth, $secret, $replyAttrs);
