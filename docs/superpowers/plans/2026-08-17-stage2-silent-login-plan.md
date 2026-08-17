@@ -426,9 +426,11 @@ After `$settings = get_settings($db);` and after `$mikrotikParams` is built, ins
 // from here (the portal sits behind the router's NAT). Two rules contain that:
 //   1. We only ever REUSE a still-valid credential. A forged MAC cannot create
 //      or renew one, so at worst it rides a session that already exists.
-//   2. The code is never displayed on this path — only posted to the router. A
-//      spoofed MAC therefore yields Wi-Fi that was free anyway, not somebody
-//      else's prize-draw code.
+//   2. The code is not RENDERED as visible text here, but it is unavoidably
+//      present in the hidden fields below — the credential has to pass through
+//      the browser to reach the router, so anyone who can craft this request can
+//      read it from the page source. Hiding it visually is cosmetic. Residual
+//      risk: someone who knows a device's MAC can learn that attendee's code.
 $silentCode = '';
 $silentLoginUrl = '';
 
