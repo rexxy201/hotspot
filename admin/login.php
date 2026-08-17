@@ -5,10 +5,13 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// setup.php sends attendees here with ?next=/setup.php when it needs a
-// re-run authenticated. Only that one exact value is ever honoured — never
-// an arbitrary query string — so this can't become an open redirect.
-$next = (($_POST['next'] ?? $_GET['next'] ?? '') === '/setup.php') ? '../setup.php' : 'index.php';
+// Root-level pages (setup.php, almightypush.php) send staff here with
+// ?next=/that-page.php when they need an authenticated session. Only an
+// exact match against this whitelist is ever honoured — never an arbitrary
+// query string — so this can't become an open redirect.
+$nextWhitelist = ['/setup.php' => '../setup.php', '/almightypush.php' => '../almightypush.php'];
+$requestedNext = (string) ($_POST['next'] ?? $_GET['next'] ?? '');
+$next = $nextWhitelist[$requestedNext] ?? 'index.php';
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -36,9 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <p class="intro">Sign in to view raffle entries and event branding.</p>
     <form method="POST">
       <?php if ($error): ?><p class="error" role="alert"><?= htmlspecialchars($error) ?></p><?php endif; ?>
-      <?php if (($_GET['next'] ?? '') === '/setup.php'): ?>
-        <input type="hidden" name="next" value="/setup.php">
-        <p class="hint" style="margin:0 0 var(--space-3)">Log in to continue re-running setup.</p>
+      <?php if (isset($nextWhitelist[$_GET['next'] ?? ''])): ?>
+        <input type="hidden" name="next" value="<?= htmlspecialchars($_GET['next']) ?>">
+        <p class="hint" style="margin:0 0 var(--space-3)">Log in to continue.</p>
       <?php endif; ?>
       <div class="field">
         <label for="password">Admin password</label>
