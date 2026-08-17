@@ -86,11 +86,9 @@ try {
         }
         if ($existing === null) {
             // create_entry() succeeded with no race — this is a newly
-            // created entry, so it needs a radcheck row. If this throws,
-            // it propagates straight to the outer catch below (it can
-            // never be a duplicate-key race, since radcheck.username has
-            // no unique constraint).
-            radius_add_user($db, $code);
+            // created entry, so it needs a Wi-Fi credential. If this throws,
+            // it propagates straight to the outer catch below.
+            radius_add_user($db, $code, $settings);
         }
     } else {
         $code = $existing['code'];

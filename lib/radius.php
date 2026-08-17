@@ -1,25 +1,21 @@
 <?php
-function radius_add_user(mysqli $db, string $code): void {
-    $stmt = $db->prepare('INSERT INTO radcheck (username, attribute, op, value) VALUES (?, ?, ?, ?)');
+require_once __DIR__ . '/credentials.php';
 
-    $attr = 'Cleartext-Password';
-    $op = ':=';
-    $stmt->bind_param('ssss', $code, $attr, $op, $code);
-    $stmt->execute();
-
-    $attr = 'Simultaneous-Use';
-    $limit = '1';
-    $stmt->bind_param('ssss', $code, $attr, $op, $limit);
-    $stmt->execute();
-
-    $stmt->close();
+/**
+ * Issue the Wi-Fi credential for a freshly created entry.
+ *
+ * The 8-digit code is both the RADIUS username and password. How long it stays
+ * valid, and what speed cap applies, come from the admin settings.
+ */
+function radius_add_user(mysqli $db, string $code, array $settings): void
+{
+    $minutes = max(1, (int) ($settings['session_minutes'] ?? 720));
+    $rate = trim((string) ($settings['rate_limit'] ?? ''));
+    issue_credential($db, $code, $minutes, $rate !== '' ? $rate : null);
 }
 
-function radius_user_exists(mysqli $db, string $code): bool {
-    $stmt = $db->prepare('SELECT 1 FROM radcheck WHERE username = ? LIMIT 1');
-    $stmt->bind_param('s', $code);
-    $stmt->execute();
-    $exists = $stmt->get_result()->num_rows > 0;
-    $stmt->close();
-    return $exists;
+/** Whether a code currently has a valid (unexpired) Wi-Fi credential. */
+function radius_user_exists(mysqli $db, string $code): bool
+{
+    return find_valid_credential($db, $code) !== null;
 }
