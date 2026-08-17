@@ -740,3 +740,6 @@ td.code-cell {
   accent-color: var(--brand-color);
   cursor: pointer;
 }
+
+/* Byte counts line up column-wise when the digits are tabular. */
+.num-cell { font-variant-numeric: tabular-nums; white-space: nowrap; }

@@ -3,6 +3,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../lib/settings.php';
 require_once __DIR__ . '/../lib/credentials.php';
+require_once __DIR__ . '/../lib/usage.php';
 require_once __DIR__ . '/layout.php';
 require_admin_session();
 
@@ -14,6 +15,7 @@ $entriesToday = (int) $db->query(
     'SELECT COUNT(*) AS c FROM entries WHERE DATE(created_at) = CURDATE()'
 )->fetch_assoc()['c'];
 $activeCredentials = count_active_credentials($db);
+$dataServed = total_usage_bytes($db);
 
 $recent = $db->query(
     'SELECT name, email, code, created_at FROM entries ORDER BY created_at DESC LIMIT 8'
@@ -38,6 +40,10 @@ admin_layout_start('index.php', 'Dashboard', $settings);
   <div class="stat">
     <span class="stat-label">Active Wi-Fi codes</span>
     <span class="stat-value"><?= number_format($activeCredentials) ?></span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Data served</span>
+    <span class="stat-value"><?= htmlspecialchars(format_bytes($dataServed)) ?></span>
   </div>
 </div>
 

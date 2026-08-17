@@ -4,6 +4,7 @@ require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../lib/csv.php';
 require_once __DIR__ . '/../lib/credentials.php';
 require_once __DIR__ . '/../lib/settings.php';
+require_once __DIR__ . '/../lib/usage.php';
 require_once __DIR__ . '/layout.php';
 require_admin_session();
 
@@ -32,6 +33,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'revok
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reset_usage') {
+    $code = trim((string) ($_POST['code'] ?? ''));
+    if (preg_match('/^[0-9]{8}$/', $code) === 1) {
+        // Clears recorded usage only — the raffle entry and the credential are
+        // both untouched, so this gives someone their full allowance back
+        // without giving them a new code.
+        reset_usage_for_code($db, $code);
+        header('Location: entries.php?usagereset=' . urlencode($code));
+    } else {
+        header('Location: entries.php?error=badcode');
+    }
+    exit;
+}
+
 // `seconds_remaining` is computed by MySQL, never in PHP: this deployment runs
 // PHP and MySQL in different timezones, so date arithmetic on expires_at here
 // would be wrong by the offset.
@@ -39,9 +54,14 @@ $result = $db->query(
     'SELECT e.name, e.phone, e.email, e.code, e.created_at,
             c.expires_at,
             c.mac,
-            TIMESTAMPDIFF(SECOND, NOW(), c.expires_at) AS seconds_remaining
+            TIMESTAMPDIFF(SECOND, NOW(), c.expires_at) AS seconds_remaining,
+            COALESCE(u.used, 0) AS used_bytes
        FROM entries e
        LEFT JOIN wifi_credentials c ON c.username = e.code
+       LEFT JOIN (
+            SELECT username, SUM(input_octets + output_octets) AS used
+              FROM radius_sessions GROUP BY username
+       ) u ON u.username = e.code
       ORDER BY e.created_at DESC'
 );
 
@@ -68,6 +88,10 @@ $error = '';
 $revoked = trim((string) ($_GET['revoked'] ?? ''));
 if (preg_match('/^[0-9]{8}$/', $revoked) === 1) {
     $notice = "Wi-Fi access revoked for code {$revoked}. Their raffle entry is untouched.";
+}
+$usageReset = trim((string) ($_GET['usagereset'] ?? ''));
+if (preg_match('/^[0-9]{8}$/', $usageReset) === 1) {
+    $notice = "Data usage reset for code {$usageReset}. Their allowance starts again.";
 }
 if (($_GET['error'] ?? '') === 'badcode') {
     $error = 'That was not a valid code, so nothing was revoked.';
@@ -109,7 +133,8 @@ admin_layout_start('entries.php', 'Raffle Entries', $settings);
         <thead>
           <tr>
             <th>Name</th><th>Phone</th><th>Email</th><th>Code</th>
-            <th>Submitted</th><th>Wi-Fi</th><th></th>
+            <th>Submitted</th><th>Wi-Fi</th>
+            <th>Data</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -137,6 +162,7 @@ admin_layout_start('entries.php', 'Raffle Entries', $settings);
                 <span class="pill-note" title="Device bound for silent reconnect"><?= htmlspecialchars($row['mac'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></span>
               <?php endif; ?>
             </td>
+            <td class="num-cell"><?= htmlspecialchars(format_bytes((int) $row['used_bytes']), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
             <td>
               <?php if ($isActive): ?>
                 <form method="post"
@@ -144,6 +170,14 @@ admin_layout_start('entries.php', 'Raffle Entries', $settings);
                   <input type="hidden" name="action" value="revoke">
                   <input type="hidden" name="code" value="<?= htmlspecialchars($row['code'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
                   <button type="submit" class="btn-inline btn-danger">Revoke</button>
+                </form>
+              <?php endif; ?>
+              <?php if ((int) $row['used_bytes'] > 0): ?>
+                <form method="post" style="margin-top:var(--space-1)"
+                      onsubmit="return confirm('Reset data usage for code <?= htmlspecialchars($row['code'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>?\n\nThey get their full allowance again. Their code and raffle entry do not change.')">
+                  <input type="hidden" name="action" value="reset_usage">
+                  <input type="hidden" name="code" value="<?= htmlspecialchars($row['code'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
+                  <button type="submit" class="btn-inline secondary">Reset data</button>
                 </form>
               <?php endif; ?>
             </td>
