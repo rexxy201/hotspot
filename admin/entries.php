@@ -5,6 +5,7 @@ require_once __DIR__ . '/../lib/csv.php';
 require_once __DIR__ . '/../lib/credentials.php';
 require_once __DIR__ . '/../lib/settings.php';
 require_once __DIR__ . '/../lib/usage.php';
+require_once __DIR__ . '/../lib/csrf.php';
 require_once __DIR__ . '/layout.php';
 require_admin_session();
 
@@ -20,6 +21,10 @@ $db = get_db();
 // redirect is a POST/redirect/GET: without it, refreshing the page after a
 // revoke would silently re-submit it.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'revoke') {
+    if (!csrf_verify()) {
+        header('Location: entries.php?error=csrf');
+        exit;
+    }
     $code = trim((string) ($_POST['code'] ?? ''));
     // Codes are 8 numeric digits. revoke_credential() uses a prepared
     // statement, so this is not an injection guard — it stops a malformed
@@ -34,6 +39,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'revok
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reset_usage') {
+    if (!csrf_verify()) {
+        header('Location: entries.php?error=csrf');
+        exit;
+    }
     $code = trim((string) ($_POST['code'] ?? ''));
     if (preg_match('/^[0-9]{8}$/', $code) === 1) {
         // Clears recorded usage only — the raffle entry and the credential are
@@ -98,6 +107,9 @@ if (($_GET['error'] ?? '') === 'badcode') {
     // to be true of either — saying "nothing was revoked" after a failed reset
     // would describe an action the request never asked for.
     $error = 'That was not a valid code, so nothing was changed.';
+}
+if (($_GET['error'] ?? '') === 'csrf') {
+    $error = 'That form had expired — nothing was changed. Please try again.';
 }
 
 /** How long is left on a credential, in words. */
@@ -170,6 +182,7 @@ admin_layout_start('entries.php', 'Raffle Entries', $settings);
               <?php if ($isActive): ?>
                 <form method="post"
                       onsubmit="return confirm('Revoke Wi-Fi for code <?= htmlspecialchars($row['code'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>?\n\nTheir raffle entry is kept. They can reconnect by filling in the portal form again.')">
+                  <?= csrf_field() ?>
                   <input type="hidden" name="action" value="revoke">
                   <input type="hidden" name="code" value="<?= htmlspecialchars($row['code'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
                   <button type="submit" class="btn-inline btn-danger">Revoke</button>
@@ -178,6 +191,7 @@ admin_layout_start('entries.php', 'Raffle Entries', $settings);
               <?php if ((int) $row['used_bytes'] > 0): ?>
                 <form method="post" style="margin-top:var(--space-1)"
                       onsubmit="return confirm('Reset data usage for code <?= htmlspecialchars($row['code'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>?\n\nThey get their full allowance again. Their code and raffle entry do not change.')">
+                  <?= csrf_field() ?>
                   <input type="hidden" name="action" value="reset_usage">
                   <input type="hidden" name="code" value="<?= htmlspecialchars($row['code'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
                   <button type="submit" class="btn-inline secondary">Reset data</button>

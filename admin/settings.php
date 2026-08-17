@@ -3,6 +3,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../lib/settings.php';
 require_once __DIR__ . '/../lib/uploads.php';
+require_once __DIR__ . '/../lib/csrf.php';
 require_once __DIR__ . '/layout.php';
 require_admin_session();
 
@@ -10,7 +11,9 @@ $db = get_db();
 $settings = get_settings($db);
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_verify()) {
+    $error = 'That form had expired — nothing was saved. Please try again.';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $newSettings = [
         'event_name' => trim($_POST['event_name'] ?? ''),
         'event_tagline' => trim($_POST['event_tagline'] ?? ''),
@@ -78,6 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <section class="panel">
     <?php if ($error): ?><p class="error" role="alert"><?= htmlspecialchars($error) ?></p><?php endif; ?>
     <form method="POST" enctype="multipart/form-data" class="settings-form">
+      <?= csrf_field() ?>
       <div class="field">
         <label for="event_name">Event Name</label>
         <input type="text" id="event_name" name="event_name" value="<?= htmlspecialchars($settings['event_name']) ?>">
