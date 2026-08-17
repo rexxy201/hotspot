@@ -223,8 +223,11 @@ Two limits are deliberate:
   from the admin's name/phone/email list — but it does let them consume that
   attendee's single allowed session.
 
-Attendees who lent their phone to someone can use **Not you? Sign in with your
-own details** to reach the form.
+If someone lends their phone, the borrower will be reconnected as the lender —
+the reconnect posts immediately, so the on-screen **Not you?** link is only
+reachable when JavaScript is blocked. To hand a device over properly, open the
+portal with `?forget=1` on the end of the URL (staff can give this out); that
+always shows the form and rebinds the device to whoever fills it in.
 
 The bound device is shown next to each code in Raffle Entries, so staff can see
 which entries will reconnect silently.

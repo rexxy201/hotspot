@@ -9,10 +9,12 @@ $settings = get_settings($db);
 // Preserve Mikrotik's hotspot redirect parameters across the form submission
 // so connect.php can hand the attendee back to Mikrotik's own login-only URL.
 $mikrotikParams = [
-    'mac' => $_GET['mac'] ?? '',
-    'ip' => $_GET['ip'] ?? '',
-    'link-login-only' => $_GET['link-login-only'] ?? '',
-    'link-orig' => $_GET['link-orig'] ?? '',
+    // Cast: a crafted ?mac[]= would otherwise reach normalize_mac(string) and
+    // raise a TypeError, blanking the portal for that visitor.
+    'mac' => (string) ($_GET['mac'] ?? ''),
+    'ip' => (string) ($_GET['ip'] ?? ''),
+    'link-login-only' => (string) ($_GET['link-login-only'] ?? ''),
+    'link-orig' => (string) ($_GET['link-orig'] ?? ''),
 ];
 
 // --- Silent login ---------------------------------------------------------
@@ -83,8 +85,15 @@ if (!$forget && $settings['silent_login_enabled'] === '1' && $mikrotikParams['ma
         <input type="hidden" name="password" value="<?= htmlspecialchars($silentCode) ?>">
         <button type="submit">Continue</button>
       </form>
+      <?php // Submits immediately: a reconnect that pauses defeats the purpose.
+            // This means the "Not you?" link below is only reachable when
+            // JavaScript is disabled or blocked. For the handoff case, staff
+            // hand out the ?forget=1 URL — see deploy/setup.md. ?>
       <script>document.getElementById('silent-login').submit();</script>
-      <p class="hint"><a href="index.php?forget=1">Not you? Sign in with your own details</a></p>
+      <?php // Carry the router's parameters through, or the form this reaches
+            // cannot complete a login (no link-login-only means no auto-post),
+            // and the borrower's submission would not rebind the device. ?>
+      <p class="hint"><a href="index.php?<?= htmlspecialchars(http_build_query(['forget' => '1'] + $mikrotikParams), ENT_QUOTES) ?>">Not you? Sign in with your own details</a></p>
     <?php else: ?>
     <?php if ($settings['event_logo_path']): ?>
       <img class="logo" src="<?= htmlspecialchars($settings['event_logo_path']) ?>" alt="<?= htmlspecialchars($settings['event_name']) ?> logo">

@@ -14,6 +14,11 @@ function issue_credential(mysqli $db, string $code, int $minutes, ?string $rateL
 
     // Store the canonical form so find_valid_credential_by_mac() cannot miss on
     // formatting. A non-MAC becomes NULL rather than a junk string.
+    //
+    // Note the upsert below does `mac = VALUES(mac)`, so re-issuing WITHOUT a
+    // MAC deliberately un-binds any previously bound device rather than keeping
+    // a stale binding — a device that no longer identifies itself should stop
+    // being silently reconnected.
     $mac = $mac === null ? null : (normalize_mac($mac) ?: null);
     $stmt = $db->prepare(
         'INSERT INTO wifi_credentials (username, password, mac, rate_limit, expires_at)
