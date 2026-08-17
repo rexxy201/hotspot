@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../lib/rate_limit.php';
 require_once __DIR__ . '/../lib/csrf.php';
+require_once __DIR__ . '/../lib/assets.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -44,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_verify()) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin Login</title>
-<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="<?= asset_url(__DIR__ . '/..', 'assets/style.css') ?>">
 </head>
 <body>
 <div class="portal">

@@ -17,6 +17,7 @@
 
 require_once __DIR__ . '/lib/env.php';
 require_once __DIR__ . '/lib/csrf.php';
+require_once __DIR__ . '/lib/assets.php';
 
 $envPath = __DIR__ . '/.env';
 $envExisted = is_file($envPath);
@@ -235,7 +236,7 @@ if ($envExisted) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Setup — Locked</title>
-<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="<?= asset_url(__DIR__, 'assets/style.css') ?>">
 </head>
 <body>
 <div class="portal">
@@ -428,7 +429,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Setup — Wi-Fi Portal</title>
-<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="<?= asset_url(__DIR__, 'assets/style.css') ?>">
 <style>
 .setup-shell { max-width: 720px; margin: 0 auto; padding: var(--space-5) var(--space-4); }
 .setup-steps { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-5); }

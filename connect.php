@@ -7,6 +7,7 @@ require_once __DIR__ . '/lib/radius.php';
 require_once __DIR__ . '/lib/mailer.php';
 require_once __DIR__ . '/lib/sms.php';
 require_once __DIR__ . '/lib/usage.php';
+require_once __DIR__ . '/lib/assets.php';
 
 function validate_submission(array $post): array {
     $errors = [];
@@ -40,7 +41,7 @@ if (!empty($errors)) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Check your details — <?= htmlspecialchars($errorSettings['event_name']) ?></title>
-<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="<?= asset_url(__DIR__, 'assets/style.css') ?>">
 <style>:root { --brand-color: <?= htmlspecialchars($errorSettings['brand_color']) ?>; }</style>
 </head>
 <body>
@@ -127,7 +128,7 @@ $linkLoginOnlyValid = filter_var($linkLoginOnly, FILTER_VALIDATE_URL) !== false
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= $overQuota ? 'Data limit reached' : 'Connected' ?> — <?= htmlspecialchars($settings['event_name']) ?></title>
-<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="<?= asset_url(__DIR__, 'assets/style.css') ?>">
 <style>:root { --brand-color: <?= htmlspecialchars($settings['brand_color']) ?>; }</style>
 </head>
 <body>
