@@ -66,7 +66,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'clear') {
-        if (@file_put_contents($logFile, '') !== false) {
+        // Never create the file here. The daemon runs as a different user, so a
+        // file created by the web server could leave the daemon unable to write
+        // and silently kill all logging.
+        if (!is_file($logFile)) {
+            $error = 'There is no log file to clear.';
+        } elseif (@file_put_contents($logFile, '') !== false) {
             $notice = 'Log cleared.';
         } else {
             $error = 'Could not clear the log file.';
@@ -78,9 +83,20 @@ $log = tail_log($logFile);
 
 // Surface any source IP the daemon rejected, so a one-click "trust this" is
 // possible when the router's public IP is not what was configured.
+// Anchored to a whole daemon-emitted line, NOT a substring match. The log
+// contains RADIUS usernames copied from unauthenticated devices, so an
+// attendee can put the text "Ignored packet from <their ip>" inside a
+// username field. Matching mid-line would let that forged text drive the
+// one-click Trust button below and add an attacker's host to the daemon's
+// allowlist. The timestamp prefix, and the trailing space before the
+// literal "(trusted router is ...)" the daemon always appends, mean only a
+// line the daemon itself wrote can match.
 $suggestIp = '';
-if (preg_match_all('/Ignored packet from ([0-9.]+)/', $log, $m)) {
-    $suggestIp = end($m[1]);
+if (preg_match_all('/^\[[^\]]+\] Ignored packet from (\d{1,3}(?:\.\d{1,3}){3}) \(trusted router is /m', $log, $m)) {
+    $candidate = end($m[1]);
+    if (filter_var($candidate, FILTER_VALIDATE_IP) !== false) {
+        $suggestIp = $candidate;
+    }
 }
 
 admin_layout_start('radius-log.php', 'RADIUS Log', $settings);
@@ -103,27 +119,27 @@ admin_layout_start('radius-log.php', 'RADIUS Log', $settings);
   </div>
 </div>
 
-<?php if ($notice !== ''): ?><p class="warning"><?= htmlspecialchars($notice) ?></p><?php endif; ?>
-<?php if ($error !== ''): ?><p class="error" role="alert"><?= htmlspecialchars($error) ?></p><?php endif; ?>
+<?php if ($notice !== ''): ?><p class="warning"><?= htmlspecialchars($notice, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p><?php endif; ?>
+<?php if ($error !== ''): ?><p class="error" role="alert"><?= htmlspecialchars($error, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p><?php endif; ?>
 
 <?php if ($suggestIp !== '' && $suggestIp !== $settings['radius_nas_ip']): ?>
   <section class="panel" style="margin-bottom:var(--space-4)">
     <div class="panel-header"><h2>Unrecognised router</h2></div>
     <p class="page-sub" style="margin-bottom:var(--space-3)">
-      The daemon is ignoring packets from <strong><?= htmlspecialchars($suggestIp) ?></strong>,
+      The daemon is ignoring packets from <strong><?= htmlspecialchars($suggestIp, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></strong>,
       which is not the trusted router IP. If that is your router, trust it:
     </p>
     <form method="POST">
       <input type="hidden" name="action" value="trust_ip">
-      <input type="hidden" name="ip" value="<?= htmlspecialchars($suggestIp) ?>">
-      <button type="submit" class="btn-inline">Trust <?= htmlspecialchars($suggestIp) ?></button>
+      <input type="hidden" name="ip" value="<?= htmlspecialchars($suggestIp, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
+      <button type="submit" class="btn-inline">Trust <?= htmlspecialchars($suggestIp, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></button>
     </form>
   </section>
 <?php endif; ?>
 
 <section class="panel">
   <div class="panel-header"><h2>Last 200 lines</h2></div>
-  <pre id="log" class="log-view"><?= htmlspecialchars($log !== '' ? $log : 'No log yet. Start the daemon with: bash start_radius.sh start') ?></pre>
+  <pre id="log" class="log-view"><?= htmlspecialchars($log !== '' ? $log : 'No log yet. Start the daemon with: bash start_radius.sh start', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></pre>
 </section>
 
 <script>
@@ -132,6 +148,9 @@ admin_layout_start('radius-log.php', 'RADIUS Log', $settings);
 setInterval(async function () {
   try {
     const res = await fetch('?raw=1', { cache: 'no-store' });
+    // A redirect to the login page would otherwise be rendered as log content.
+    const type = res.headers.get('content-type') || '';
+    if (!res.ok || !type.startsWith('text/plain')) { return; }
     const text = await res.text();
     const el = document.getElementById('log');
     const pinned = el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
