@@ -80,29 +80,41 @@ function radius_log(string $message): void
 
 /**
  * Log ignored packets without letting a flood fill the disk: one line per
- * source IP, then a single summary per minute.
+ * source IP (per reason), then a single summary per minute.
+ *
+ * $reason describes why the packet was dropped. Left empty it defaults to the
+ * source-IP allowlist wording and names the trusted router. Every drop path
+ * reachable from the wire must come through here — a direct radius_log() call
+ * writes a line per packet and can flood the log staff read during the event.
  */
-function radius_log_drop(string $from, string $expected): void
+function radius_log_drop(string $from, string $expected, string $reason = ''): void
 {
     static $seen = [];
+
+    // Track each reason separately, so a flood of one kind cannot mask the
+    // first sighting of another.
+    $key = $reason === '' ? $from : $from . '|' . $reason;
+    $why = $reason !== ''
+        ? $reason
+        : 'trusted router is ' . ($expected !== '' ? $expected : 'not set');
 
     $now = time();
     // Table full: stay silent about new sources rather than clearing the table.
     // Clearing would return every tracked source to the "first seen" branch and
     // resume full-rate logging — the opposite of what this function is for.
     // A flood from many (or spoofed) sources is exactly when the cap matters.
-    if (!isset($seen[$from]) && count($seen) >= 256) {
+    if (!isset($seen[$key]) && count($seen) >= 256) {
         return;
     }
-    if (!isset($seen[$from])) {
-        $seen[$from] = ['since' => $now, 'count' => 0];
-        radius_log("Ignored packet from {$from} (trusted router is " . ($expected !== '' ? $expected : 'not set') . ')');
+    if (!isset($seen[$key])) {
+        $seen[$key] = ['since' => $now, 'count' => 0];
+        radius_log("Ignored packet from {$from} ({$why})");
         return;
     }
-    $seen[$from]['count']++;
-    if ($now - $seen[$from]['since'] >= 60) {
-        radius_log("Ignored {$seen[$from]['count']} further packets from {$from} in the last minute");
-        $seen[$from] = ['since' => $now, 'count' => 0];
+    $seen[$key]['count']++;
+    if ($now - $seen[$key]['since'] >= 60) {
+        radius_log("Ignored {$seen[$key]['count']} further packets from {$from} in the last minute ({$why})");
+        $seen[$key] = ['since' => $now, 'count' => 0];
     }
 }
 
@@ -266,7 +278,14 @@ while (true) {
     $write = null;
     $except = null;
     $ready = @socket_select($read, $write, $except, 1);
-    if ($ready === false || $ready === 0) {
+    if ($ready === false) {
+        // A persistent select error would otherwise spin this loop flat out:
+        // nothing else here blocks. Pause briefly so a broken socket costs the
+        // VPS a little latency rather than a whole CPU core.
+        usleep(200000);
+        continue;
+    }
+    if ($ready === 0) {
         continue;
     }
 
@@ -308,7 +327,11 @@ while (true) {
                 // an attacker their guess was accepted, and there is no legitimate
                 // sender that cannot compute this.
                 if (!radius_verify_accounting(substr($buf, 0, $declaredLength), $secret)) {
-                    radius_log('Ignored Accounting-Request with a bad authenticator from ' . $from);
+                    // Rate-limited like every other wire-reachable log line: one
+                    // line per source per minute. Logging each packet directly
+                    // would let anything that clears the allowlist flood the
+                    // operational log staff read during the event.
+                    radius_log_drop($from, $allowedNasIp, 'Accounting-Request with a bad authenticator');
                     continue;
                 }
 
@@ -438,6 +461,11 @@ while (true) {
             // Session length rides on the standard Session-Timeout attribute (27),
             // which Mikrotik honours; there is no Mikrotik uptime-limit VSA.
             $replyAttrs = radius_encode_attr(R_ATTR_SESSION_TIMEOUT, pack('N', $remaining));
+
+            // Ask for interim accounting every 5 minutes. Without this the router only
+            // reports at session end, so a lost Stop packet loses the whole session's
+            // usage and the admin Data column stays at zero all event.
+            $replyAttrs .= radius_encode_attr(R_ATTR_ACCT_INTERIM_INTERVAL, pack('N', 300));
 
             $rate = (string) ($row['rate_limit'] ?? '');
             if ($rate === '') {

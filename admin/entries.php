@@ -94,7 +94,10 @@ if (preg_match('/^[0-9]{8}$/', $usageReset) === 1) {
     $notice = "Data usage reset for code {$usageReset}. Their allowance starts again.";
 }
 if (($_GET['error'] ?? '') === 'badcode') {
-    $error = 'That was not a valid code, so nothing was revoked.';
+    // Both the revoke and the reset_usage path redirect here, so the wording has
+    // to be true of either — saying "nothing was revoked" after a failed reset
+    // would describe an action the request never asked for.
+    $error = 'That was not a valid code, so nothing was changed.';
 }
 
 /** How long is left on a credential, in words. */

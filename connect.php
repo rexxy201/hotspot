@@ -6,6 +6,7 @@ require_once __DIR__ . '/lib/entries.php';
 require_once __DIR__ . '/lib/radius.php';
 require_once __DIR__ . '/lib/mailer.php';
 require_once __DIR__ . '/lib/sms.php';
+require_once __DIR__ . '/lib/usage.php';
 
 function validate_submission(array $post): array {
     $errors = [];
@@ -99,6 +100,12 @@ try {
     // that drops off the Wi-Fi reconnect later without re-typing its details.
     $submittedMac = (string) ($_POST['mikrotik_mac'] ?? '');
     radius_add_user($db, $code, $settings, $submittedMac);
+
+    // The daemon refuses an over-quota code at RADIUS. Without this check the
+    // attendee would see "You're connected" and only then be refused by the
+    // router — the same misleading sequence Stage 1 fixed for expired codes.
+    $quotaMb = (int) ($settings['data_quota_mb'] ?? 0);
+    $overQuota = $quotaMb > 0 && usage_bytes_for_code($db, $code) >= ($quotaMb * 1048576);
 } catch (\Throwable $e) {
     error_log('connect.php: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
     http_response_code(500);
@@ -119,7 +126,7 @@ $linkLoginOnlyValid = filter_var($linkLoginOnly, FILTER_VALIDATE_URL) !== false
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Connected — <?= htmlspecialchars($settings['event_name']) ?></title>
+<title><?= $overQuota ? 'Data limit reached' : 'Connected' ?> — <?= htmlspecialchars($settings['event_name']) ?></title>
 <link rel="stylesheet" href="assets/style.css">
 <style>:root { --brand-color: <?= htmlspecialchars($settings['brand_color']) ?>; }</style>
 </head>
@@ -129,6 +136,14 @@ $linkLoginOnlyValid = filter_var($linkLoginOnly, FILTER_VALIDATE_URL) !== false
     <?php if ($settings['event_logo_path']): ?>
       <img class="logo" src="<?= htmlspecialchars($settings['event_logo_path']) ?>" alt="<?= htmlspecialchars($settings['event_name']) ?> logo">
     <?php endif; ?>
+    <?php if ($overQuota): ?>
+      <h1>Data limit reached</h1>
+      <p class="warning">You've used your full data allowance for <?= htmlspecialchars($settings['event_name']) ?>, so we can't put you back online.</p>
+      <p class="hint">Please see event staff if you need more data.</p>
+      <p class="code-label">Your code</p>
+      <strong class="code" id="code"><?= htmlspecialchars($code) ?></strong>
+      <p class="hint">Keep this code — it's still your entry for the prize draw.</p>
+    <?php else: ?>
     <svg class="success-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
       <circle cx="12" cy="12" r="10"></circle>
@@ -142,7 +157,10 @@ $linkLoginOnlyValid = filter_var($linkLoginOnly, FILTER_VALIDATE_URL) !== false
     <?php if (!$emailSent): ?><p class="warning">We couldn't email your code — it's shown above, please save it.</p><?php endif; ?>
     <?php if (!$smsSent): ?><p class="warning">We couldn't text your code — it's shown above, please save it.</p><?php endif; ?>
 
-    <?php if ($linkLoginOnlyValid): ?>
+    <?php endif; ?>
+    <?php // Never auto-login an over-quota code: the router would refuse it and
+          // replace the explanation above with its own error page. ?>
+    <?php if (!$overQuota && $linkLoginOnlyValid): ?>
       <form id="mikrotik-login" method="POST" action="<?= htmlspecialchars($linkLoginOnly) ?>">
         <input type="hidden" name="username" value="<?= htmlspecialchars($code) ?>">
         <input type="hidden" name="password" value="<?= htmlspecialchars($code) ?>">

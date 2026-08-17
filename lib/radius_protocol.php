@@ -24,6 +24,9 @@ const R_ATTR_VENDOR_SPECIFIC = 26;
 const R_ATTR_SESSION_TIMEOUT = 27;
 const R_ATTR_CALLING_STATION = 31;  // the client MAC
 const R_ATTR_CHAP_CHALLENGE  = 60;
+// How often the router should report a live session's counters. Without this
+// RouterOS defaults to "received" and sends nothing until the session ends.
+const R_ATTR_ACCT_INTERIM_INTERVAL = 85;
 
 // Accounting attributes (RFC 2866).
 const R_ATTR_ACCT_STATUS_TYPE      = 40;

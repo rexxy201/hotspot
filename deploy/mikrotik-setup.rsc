@@ -25,8 +25,13 @@
 # Accounting is ON: the daemon listens on the accounting port and records what
 # each code transfers, which is what makes the data limit work. If you turn it
 # off, usage stays at zero and the data limit silently never fires.
+#
+# radius-interim-update is just as important. Without an interim interval the
+# router reports only at session end, so nothing lands while a session is live:
+# the Data column in Raffle Entries would stay at zero all event, and a lost
+# Acct-Stop (or a router reboot) would drop that session's usage entirely.
 /ip hotspot profile set [find name=__HS_PROFILE__] use-radius=yes \
-  radius-accounting=yes login-by=http-chap,http-pap
+  radius-accounting=yes radius-interim-update=5m login-by=http-chap,http-pap
 :put "  ~ hotspot profile __HS_PROFILE__ set to use RADIUS (accounting on)"
 
 # 2b) One code = one device at a time. This replaces the Simultaneous-Use := 1

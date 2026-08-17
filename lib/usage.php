@@ -4,9 +4,14 @@
  * Record what the router says a session has transferred.
  *
  * RADIUS accounting reports ABSOLUTE counters for a session on every interim
- * update, so this overwrites rather than adds. That makes it idempotent: a
- * retransmission, a duplicate, or an out-of-order packet all converge on the
- * same stored value instead of inflating it.
+ * update, so this stores rather than adds. That makes it idempotent: a
+ * retransmission or a duplicate converges on the same stored value instead of
+ * inflating it.
+ *
+ * The stored counters only ever move UPWARD (GREATEST below), so a late,
+ * reordered or replayed packet carrying lower counters — a retransmitted
+ * Acct-Start, whose counters are zero — cannot walk a session's usage
+ * backwards and hand back allowance that was already spent.
  *
  * $inputOctets and $outputOctets must already have their gigawords companions
  * folded in — see radius_octets_64().
@@ -18,8 +23,8 @@ function record_session_usage(mysqli $db, string $sessionId, string $username, i
          VALUES (?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
             username = VALUES(username),
-            input_octets = VALUES(input_octets),
-            output_octets = VALUES(output_octets)'
+            input_octets = GREATEST(input_octets, VALUES(input_octets)),
+            output_octets = GREATEST(output_octets, VALUES(output_octets))'
     );
     $stmt->bind_param('ssii', $sessionId, $username, $inputOctets, $outputOctets);
     $stmt->execute();

@@ -127,4 +127,6 @@ $tampered = $goodPacket;
 $tampered[strlen($tampered) - 1] = chr(ord($tampered[strlen($tampered) - 1]) ^ 0xFF);
 assert_true(!radius_verify_accounting($tampered, $acctSecret), 'a tampered packet fails verification');
 
+assert_equals(85, R_ATTR_ACCT_INTERIM_INTERVAL, 'Acct-Interim-Interval is attribute 85');
+
 test_summary();

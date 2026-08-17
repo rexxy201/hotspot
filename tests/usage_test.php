@@ -61,4 +61,10 @@ assert_equals('1.0 KB', format_bytes(1024), 'format_bytes handles kilobytes');
 assert_equals('1.5 MB', format_bytes(1572864), 'format_bytes handles megabytes');
 assert_equals('2.0 GB', format_bytes(2147483648), 'format_bytes handles gigabytes');
 
+// A late or replayed packet carrying LOWER counters (a retransmitted Acct-Start,
+// say) must not walk usage backwards — counters only move up.
+record_session_usage($db, 'sess-LATE', '33334444', 9000, 1000);
+record_session_usage($db, 'sess-LATE', '33334444', 0, 0);
+assert_equals(10000, usage_bytes_for_code($db, '33334444'), 'a lower replayed counter does not reduce recorded usage');
+
 test_summary();
