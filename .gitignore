@@ -6,3 +6,6 @@ uploads/logos/*
 # Local dev server logs
 php_err.log
 php_out.log
+
+logs/*
+!logs/.gitkeep
