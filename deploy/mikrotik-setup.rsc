@@ -12,23 +12,22 @@
 # 1) Point the router at our RADIUS daemon.
 :if ([:len [/radius find where address=__VPS_IP__]] = 0) do={
   /radius add service=hotspot address=__VPS_IP__ secret="__RADIUS_SECRET__" \
-    authentication-port=__AUTH_PORT__ accounting-port=1813 timeout=3s
+    authentication-port=__AUTH_PORT__ accounting-port=__ACCT_PORT__ timeout=3s
   :put "  + RADIUS server added"
 } else={
   /radius set [find where address=__VPS_IP__] service=hotspot \
     secret="__RADIUS_SECRET__" authentication-port=__AUTH_PORT__ \
-    accounting-port=1813 timeout=3s
+    accounting-port=__ACCT_PORT__ timeout=3s
   :put "  ~ RADIUS server updated"
 }
 
 # 2) Tell the hotspot profile to authenticate via RADIUS.
-# radius-accounting=no on purpose: the Stage 1 daemon binds only the auth port
-# and does not process accounting yet, so leaving accounting on would make the
-# router retry Accounting-Requests against a UDP port nobody is listening on,
-# for the whole event.
+# Accounting is ON: the daemon listens on the accounting port and records what
+# each code transfers, which is what makes the data limit work. If you turn it
+# off, usage stays at zero and the data limit silently never fires.
 /ip hotspot profile set [find name=__HS_PROFILE__] use-radius=yes \
-  radius-accounting=no login-by=http-chap,http-pap
-:put "  ~ hotspot profile __HS_PROFILE__ set to use RADIUS (accounting off)"
+  radius-accounting=yes login-by=http-chap,http-pap
+:put "  ~ hotspot profile __HS_PROFILE__ set to use RADIUS (accounting on)"
 
 # 2b) One code = one device at a time. This replaces the Simultaneous-Use := 1
 # check the old FreeRADIUS radcheck table enforced; without RADIUS accounting
