@@ -24,9 +24,17 @@ $mikrotikParams = [
 // from here (the portal sits behind the router's NAT). Two rules contain that:
 //   1. We only ever REUSE a still-valid credential. A forged MAC cannot create
 //      or renew one, so at worst it rides a session that already exists.
-//   2. The code is never displayed on this path — only posted to the router. A
-//      spoofed MAC therefore yields Wi-Fi that was free anyway, not somebody
-//      else's prize-draw code.
+//   2. The code is not RENDERED as visible text here, but it is unavoidably
+//      present in the hidden fields below. To log a browser into the router the
+//      credential has to pass through that browser, so anyone who can craft this
+//      request can read the code from the page source. Hiding it visually is
+//      cosmetic, not a control. The residual risk is therefore: someone who
+//      already knows a device's MAC can learn that attendee's code. That buys
+//      Wi-Fi which is free anyway, and does not let them claim the prize (the
+//      draw is run from the admin's name/phone/email list, not from the code) —
+//      but it does let them consume the victim's single allowed session.
+//      Closing it properly needs a device credential separate from the raffle
+//      code; see the Stage 2 plan's note.
 $silentCode = '';
 $silentLoginUrl = '';
 

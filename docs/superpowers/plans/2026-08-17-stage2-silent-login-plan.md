@@ -520,7 +520,9 @@ GW="http://10.5.50.1/login"
 echo "--- 1. known device + real gateway -> silent, and the code is NOT shown ---"
 curl -s "http://localhost:8010/index.php?mac=DE:AD:BE:EF:00:01&link-login-only=$GW" > /tmp/silent.html
 grep -c "silent-login" /tmp/silent.html
-grep -c "65656565" /tmp/silent.html
+# The code IS present in the hidden fields — it must be, to reach the router.
+# Assert only that it is not rendered as visible text.
+grep -c 'class="code"' /tmp/silent.html
 grep -o "Welcome back" /tmp/silent.html
 
 echo "--- 2. unknown device -> form ---"
@@ -540,9 +542,9 @@ mysql -u root wifi_portal -e "UPDATE settings SET setting_value='1' WHERE settin
 kill %1
 ```
 
-Expected: (1) `1` for `silent-login`, **`0` for the code** — it must not appear in the HTML — and `Welcome back`; (2) through (5) each print `id="connect-form"`.
+Expected: (1) `1` for `silent-login`, `0` for `class="code"` — the code must not be rendered as visible text — and `Welcome back`; (2) through (5) each print `id="connect-form"`.
 
-Check 1's second number is the security property from the plan header. If the code appears, it is in the page and must be removed before this task is done.
+**Correction to the plan header.** The header originally claimed the silent path never exposes the code. That is wrong: the credential has to travel through the client's browser to reach the router, so it is in the hidden fields and readable from the page source by anyone who can craft the request. Not rendering it visibly is cosmetic. The real, holding protection is rule 1 — silent login never issues or renews, only reuses. Fully closing the exposure requires a device credential distinct from the raffle code, which is a separate decision.
 
 - [ ] **Step 5: Commit**
 
