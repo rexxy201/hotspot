@@ -241,6 +241,8 @@ open on a laptop beside you.
       *Fails →* the router isn't sending `mac`. Check Raffle Entries: a blank device column means no MAC was recorded. Harmless — everyone just sees the form.
 - [ ] **8.** Admin → **Raffle Entries** shows the entry, its device, and a **Revoke** button.
 - [ ] **9.** **Download CSV** and open it. This is your prize-draw list.
+- [ ] **10.** If you set a **Speed cap**, run a speed test on the phone and confirm it is actually capped.
+      *Fails →* the cap is not being applied. This was silently broken once before (a wrong Mikrotik attribute number), so verify it rather than assuming.
 
 ---
 

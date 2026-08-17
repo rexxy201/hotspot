@@ -99,4 +99,16 @@ assert_equals(12884901888, radius_octets_64($attrs, R_ATTR_ACCT_INPUT_OCTETS, R_
 // Nothing present at all.
 assert_equals(0, radius_octets_64([], R_ATTR_ACCT_INPUT_OCTETS, R_ATTR_ACCT_INPUT_GIGAWORDS), 'missing counters read as zero');
 
+// --- Mikrotik vendor attribute numbers -----------------------------------
+// Pinned against FreeRADIUS dictionary.mikrotik (vendor 14988). A wrong
+// sub-type is not rejected by the router — it is silently ignored or applied
+// as a different attribute entirely, so nothing surfaces at runtime. These
+// assertions are the only thing that catches a regression.
+assert_equals(14988, VENDOR_MIKROTIK, 'the Mikrotik vendor id is 14988');
+assert_equals(3, MT_GROUP, 'Mikrotik-Group is 3 (5 is Wireless-Skip-Dot1x)');
+assert_equals(8, MT_RATE_LIMIT, 'Mikrotik-Rate-Limit is 8 (9 is Realm)');
+assert_equals(17, MT_TOTAL_LIMIT, 'Mikrotik-Total-Limit is 17');
+assert_equals(18, MT_TOTAL_LIMIT_GIGAWORDS, 'Mikrotik-Total-Limit-Gigawords is 18 (15 is Xmit-Limit-Gigawords)');
+assert_true(!defined('MT_UPTIME_LIMIT'), 'there is no Mikrotik uptime-limit attribute; session length uses the standard Session-Timeout');
+
 test_summary();

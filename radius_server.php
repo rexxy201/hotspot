@@ -338,8 +338,9 @@ while (true) {
         // zero or negative timeout.
         $remaining = max(60, (int) $row['seconds_remaining']);
 
-        $replyAttrs = radius_encode_attr(R_ATTR_SESSION_TIMEOUT, pack('N', $remaining))
-                    . radius_encode_vsa(VENDOR_MIKROTIK, MT_UPTIME_LIMIT, pack('N', $remaining));
+        // Session length rides on the standard Session-Timeout attribute (27),
+        // which Mikrotik honours; there is no Mikrotik uptime-limit VSA.
+        $replyAttrs = radius_encode_attr(R_ATTR_SESSION_TIMEOUT, pack('N', $remaining));
 
         $rate = (string) ($row['rate_limit'] ?? '');
         if ($rate === '') {

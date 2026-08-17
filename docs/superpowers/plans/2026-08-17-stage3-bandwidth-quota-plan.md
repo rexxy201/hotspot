@@ -271,7 +271,7 @@ git commit -m "feat: record per-session RADIUS usage idempotently"
 - Test: `tests/radius_protocol_test.php`
 
 **Interfaces:**
-- Produces (constants): `R_ATTR_ACCT_STATUS_TYPE` (40), `R_ATTR_ACCT_INPUT_OCTETS` (42), `R_ATTR_ACCT_OUTPUT_OCTETS` (43), `R_ATTR_ACCT_SESSION_ID` (44), `R_ATTR_ACCT_INPUT_GIGAWORDS` (52), `R_ATTR_ACCT_OUTPUT_GIGAWORDS` (53), `ACCT_START` (1), `ACCT_STOP` (2), `ACCT_INTERIM` (3), `MT_TOTAL_LIMIT` (17), `MT_TOTAL_LIMIT_GIGAWORDS` (15).
+- Produces (constants): `R_ATTR_ACCT_STATUS_TYPE` (40), `R_ATTR_ACCT_INPUT_OCTETS` (42), `R_ATTR_ACCT_OUTPUT_OCTETS` (43), `R_ATTR_ACCT_SESSION_ID` (44), `R_ATTR_ACCT_INPUT_GIGAWORDS` (52), `R_ATTR_ACCT_OUTPUT_GIGAWORDS` (53), `ACCT_START` (1), `ACCT_STOP` (2), `ACCT_INTERIM` (3), `MT_TOTAL_LIMIT` (17), `MT_TOTAL_LIMIT_GIGAWORDS` (18).
 - Produces: `radius_uint32(string $value): int` — decode a 4-byte big-endian attribute, 0 if malformed.
 - Produces: `radius_octets_64(array $attrs, int $octetsAttr, int $gigawordsAttr): int` — fold a 32-bit counter and its gigawords companion into the true total.
 
@@ -337,7 +337,7 @@ and alongside the existing Mikrotik VSA constants:
 
 ```php
 const MT_TOTAL_LIMIT           = 17; // combined byte limit for the session
-const MT_TOTAL_LIMIT_GIGAWORDS = 15; // its 2^32 multiplier, for limits over 4GB
+const MT_TOTAL_LIMIT_GIGAWORDS = 18; // its 2^32 multiplier, for limits over 4GB
 ```
 
 Then append these functions:

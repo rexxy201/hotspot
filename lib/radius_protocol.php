@@ -40,13 +40,22 @@ const ACCT_STOP    = 2;
 const ACCT_INTERIM = 3;
 
 // Mikrotik vendor-specific attributes.
+//
+// These sub-type numbers come from FreeRADIUS's dictionary.mikrotik (vendor
+// 14988) and must match it exactly. A wrong sub-type is not rejected by the
+// router: it is silently ignored, or applied as whichever attribute really
+// carries that number — nothing surfaces at runtime, and the feature simply
+// never works. That is why every one of them is pinned by a test.
 const VENDOR_MIKROTIK = 14988;
-const MT_GROUP        = 5;  // hotspot user profile / group
-const MT_UPTIME_LIMIT = 7;  // session seconds
-const MT_RATE_LIMIT   = 9;  // e.g. "5M/5M"
+const MT_GROUP        = 3;  // hotspot user profile / group
+const MT_RATE_LIMIT   = 8;  // e.g. "5M/5M"
+
+// There is no Mikrotik uptime-limit VSA. Session length is carried by the
+// STANDARD RADIUS Session-Timeout (attribute 27, R_ATTR_SESSION_TIMEOUT above),
+// which the daemon already sends and which Mikrotik honours.
 
 const MT_TOTAL_LIMIT           = 17; // combined byte limit for the session
-const MT_TOTAL_LIMIT_GIGAWORDS = 15; // its 2^32 multiplier, for limits over 4GB
+const MT_TOTAL_LIMIT_GIGAWORDS = 18; // its 2^32 multiplier, for limits over 4GB
 
 /**
  * Split a RADIUS attribute blob into [type => value].
