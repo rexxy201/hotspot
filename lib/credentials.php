@@ -11,6 +11,10 @@ function issue_credential(mysqli $db, string $code, int $minutes, ?string $rateL
     // The expiry is computed by the database, not by PHP: `find_valid_credential()`
     // and `count_active_credentials()` compare against MySQL's NOW(), and PHP's
     // timezone is not guaranteed to match the database server's.
+
+    // Store the canonical form so find_valid_credential_by_mac() cannot miss on
+    // formatting. A non-MAC becomes NULL rather than a junk string.
+    $mac = $mac === null ? null : (normalize_mac($mac) ?: null);
     $stmt = $db->prepare(
         'INSERT INTO wifi_credentials (username, password, mac, rate_limit, expires_at)
          VALUES (?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))
@@ -78,4 +82,48 @@ function count_active_credentials(mysqli $db): int
 {
     $row = $db->query('SELECT COUNT(*) AS c FROM wifi_credentials WHERE expires_at > NOW()')->fetch_assoc();
     return (int) $row['c'];
+}
+
+/**
+ * Canonicalise a MAC to uppercase colon-separated form, or '' if it is not one.
+ *
+ * Routers differ in case and separator, so storing and comparing a canonical
+ * form stops a lookup missing purely on formatting. Returning '' for anything
+ * that is not a MAC means callers get one obviously-invalid value to check
+ * rather than having to validate the shape themselves.
+ */
+function normalize_mac(string $mac): string
+{
+    $hex = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', $mac));
+    if (strlen($hex) !== 12) {
+        return '';
+    }
+    return implode(':', str_split($hex, 2));
+}
+
+/**
+ * The still-valid credential bound to a device, or null.
+ *
+ * Used only by the silent-login path. The `expires_at > NOW()` filter is load
+ * bearing: the MAC is supplied by the client, so matching an expired row here
+ * would let a forged MAC revive a dead credential.
+ */
+function find_valid_credential_by_mac(mysqli $db, string $mac): ?array
+{
+    $normalised = normalize_mac($mac);
+    if ($normalised === '') {
+        return null;
+    }
+    $stmt = $db->prepare(
+        'SELECT id, username, password, mac, rate_limit, expires_at,
+                TIMESTAMPDIFF(SECOND, NOW(), expires_at) AS seconds_remaining
+           FROM wifi_credentials
+          WHERE mac = ? AND expires_at > NOW()
+          LIMIT 1'
+    );
+    $stmt->bind_param('s', $normalised);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $row ?: null;
 }

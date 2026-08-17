@@ -56,4 +56,40 @@ assert_true($stillThere !== null, 'revoking leaves the raffle entry in place');
 assert_equals('31313131', $stillThere['code'], 'the raffle entry keeps its original code after revoking');
 $db->query("DELETE FROM entries WHERE email = 'revoke.test@example.com'");
 
+// --- MAC normalisation ---------------------------------------------------
+// Mikrotik sends AA:BB:CC:DD:EE:FF, but routers and vendors vary in case and
+// separator. Normalising on the way in means a lookup cannot miss simply
+// because the same device was recorded in a different format.
+assert_equals('AA:BB:CC:DD:EE:FF', normalize_mac('aa:bb:cc:dd:ee:ff'), 'normalize_mac uppercases');
+assert_equals('AA:BB:CC:DD:EE:FF', normalize_mac('AA-BB-CC-DD-EE-FF'), 'normalize_mac accepts dash separators');
+assert_equals('AA:BB:CC:DD:EE:FF', normalize_mac('aabbccddeeff'), 'normalize_mac accepts bare hex');
+assert_equals('AA:BB:CC:DD:EE:FF', normalize_mac('  AA:BB:CC:DD:EE:FF  '), 'normalize_mac trims');
+assert_equals('', normalize_mac(''), 'an empty MAC normalises to empty');
+assert_equals('', normalize_mac('not-a-mac'), 'a non-MAC normalises to empty');
+assert_equals('', normalize_mac('AA:BB:CC:DD:EE'), 'a short MAC normalises to empty');
+assert_equals('', normalize_mac('AA:BB:CC:DD:EE:FF:00'), 'an over-long MAC normalises to empty');
+
+// --- lookup by MAC -------------------------------------------------------
+$db->query('DELETE FROM wifi_credentials');
+assert_equals(null, find_valid_credential_by_mac($db, 'AA:BB:CC:DD:EE:FF'), 'no credential for an unknown MAC');
+
+issue_credential($db, '12341234', 60, null, 'AA:BB:CC:DD:EE:FF');
+$byMac = find_valid_credential_by_mac($db, 'AA:BB:CC:DD:EE:FF');
+assert_true($byMac !== null, 'a valid credential is found by its MAC');
+assert_equals('12341234', $byMac['code'] ?? $byMac['username'], 'the MAC lookup returns the right code');
+assert_true((int) $byMac['seconds_remaining'] > 3500, 'the MAC lookup returns SQL-computed seconds_remaining');
+
+// Lookup must normalise its argument too, or a differently-formatted MAC misses.
+assert_true(find_valid_credential_by_mac($db, 'aa-bb-cc-dd-ee-ff') !== null, 'the MAC lookup normalises its argument');
+
+// An EXPIRED credential must NOT be found by MAC. This is a security property,
+// not just tidiness: silent login must never resurrect a dead credential for a
+// MAC, because the MAC is attacker-supplied.
+issue_credential($db, '43214321', -60, null, 'BB:BB:BB:BB:BB:BB');
+assert_equals(null, find_valid_credential_by_mac($db, 'BB:BB:BB:BB:BB:BB'), 'an expired credential is not found by MAC');
+
+// An empty MAC must never match a row, including rows with a NULL mac.
+issue_credential($db, '56785678', 60);   // no MAC bound
+assert_equals(null, find_valid_credential_by_mac($db, ''), 'an empty MAC matches nothing');
+
 test_summary();
