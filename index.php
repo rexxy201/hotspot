@@ -100,16 +100,18 @@ if (!$forget && $settings['silent_login_enabled'] === '1' && $mikrotikParams['ma
       <p class="hint"><a href="index.php?<?= htmlspecialchars(http_build_query(['forget' => '1'] + $mikrotikParams), ENT_QUOTES) ?>">Not you? Sign in with your own details</a></p>
   </div>
   <?php else: ?>
-  <?php // Single designed banner (EYIF logo + partner/sponsor logos +
-        // "Ideas, Capital & Impact" / "EYIF 2.0") replaces the separate
-        // logo-row + heading markup that used to live here — the banner
-        // file already carries that layout. ?>
-  <img class="hero-banner" src="assets/eyif-header-banner.jpg" alt="Edo Youth Impact Forum 2.0 — Ideas, Capital &amp; Impact">
+  <?php // Single designed banner (logo + partner/sponsor logos + headline)
+        // — admin-uploadable via Branding Settings, so nothing here is
+        // fixed to one event's artwork. Falls back to the bundled EYIF 2.0
+        // banner (see SETTINGS_DEFAULTS) until an admin replaces it. ?>
+  <?php if ($settings['hero_banner_path']): ?>
+    <img class="hero-banner" src="<?= htmlspecialchars($settings['hero_banner_path']) ?>" alt="<?= htmlspecialchars($settings['event_name']) ?>">
+  <?php endif; ?>
 
   <?php // Grows to fill the space below the banner so the button lands in
         // the middle of the screen rather than immediately under it. ?>
   <div class="hero-cta">
-    <button type="button" id="open-connect-modal" class="btn-connect-win">Connect to Win</button>
+    <button type="button" id="open-connect-modal" class="btn-connect-win"><?= htmlspecialchars($settings['cta_button_text']) ?></button>
   </div>
 
   <?php // The sign-up form lives here, hidden until "Connect to Win" opens it.
