@@ -1,0 +1,32 @@
+# systemd unit for the EYIF Wi-Fi RADIUS daemon.
+#
+# Install on the VPS:
+#   sudo cp deploy/mangonet-radius.service /etc/systemd/system/
+#   sudo nano /etc/systemd/system/mangonet-radius.service   # fix paths + User
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now mangonet-radius
+#
+# Restart=always is what makes the admin UI's "Restart daemon" button work: the
+# daemon exits when it sees the restart flag, and systemd brings it back with
+# the current code.
+
+[Unit]
+Description=EYIF Wi-Fi Portal RADIUS daemon
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/wifi-portal
+ExecStart=/usr/bin/php /var/www/wifi-portal/radius_server.php
+Restart=always
+RestartSec=3
+# The daemon writes and rotates logs/radius.log itself. Do NOT redirect stdout
+# into that same file: it would double every line, and systemd would keep
+# appending to the old inode after a rotation, defeating the size cap. Startup
+# failures go to stderr, which journald captures (journalctl -u mangonet-radius).
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
