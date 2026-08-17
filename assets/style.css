@@ -779,6 +779,18 @@ td.code-cell {
   color: var(--color-text-muted);
 }
 
+/* Preview of the current upload, shown above its file input so staff can
+   see what's live before deciding whether to replace it. */
+.settings-preview {
+  display: block;
+  max-width: 100%;
+  width: 320px;
+  height: auto;
+  margin-bottom: var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--admin-border);
+}
+
 /* Sidebar collapses to a horizontal strip on narrow screens so staff can
    still use the admin from a phone at the venue. */
 @media (max-width: 720px) {

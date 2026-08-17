@@ -9,6 +9,11 @@ const SETTINGS_DEFAULTS = [
     'brand_color' => '#1B7BB8',
     'event_logo_path' => '',
     'powered_by_logo_path' => '',
+    // Attendee portal hero (the top-of-page banner + its CTA button).
+    // Defaults to the bundled EYIF 2.0 banner so existing installs render
+    // exactly as before until an admin uploads a replacement.
+    'hero_banner_path' => 'assets/eyif-header-banner.jpg',
+    'cta_button_text' => 'Connect to Win',
     // --- RADIUS / Wi-Fi ---
     'radius_secret' => '',
     'radius_auth_port' => '1812',
