@@ -142,7 +142,7 @@ git commit -m "feat: replace FreeRADIUS radcheck table with wifi_credentials"
 - Consumes: `get_db(): mysqli` from `db.php`.
 - Produces:
   - `issue_credential(mysqli $db, string $code, int $minutes, ?string $rateLimit = null, ?string $mac = null): void`
-  - `find_valid_credential(mysqli $db, string $username): ?array` — returns the row only if `expires_at > NOW()`, else `null`
+  - `find_valid_credential(mysqli $db, string $username): ?array` — returns the row only if `expires_at > NOW()`, else `null`. The row includes `seconds_remaining`, computed by MySQL via `TIMESTAMPDIFF`, which consumers MUST use instead of doing PHP date arithmetic on `expires_at` (PHP and MySQL run in different timezones here).
   - `revoke_credential(mysqli $db, string $username): void`
   - `touch_credential(mysqli $db, string $username): void`
   - `count_active_credentials(mysqli $db): int`
@@ -1097,9 +1097,16 @@ while (true) {
         continue;
     }
 
-    // Seconds left on this credential. Floored at 60 so a code that is seconds
-    // from expiry does not hand the router a zero/negative timeout.
-    $remaining = max(60, strtotime((string) $row['expires_at']) - time());
+    // Seconds left on this credential.
+    //
+    // MUST come from the SQL-computed seconds_remaining, never from
+    // strtotime($row['expires_at']) - time(): PHP and MySQL run in different
+    // timezones on this deployment (measured at 1h, later 2h with DST), so
+    // PHP-side date arithmetic on a MySQL timestamp inflates every session by
+    // the offset — a 60-minute code silently granting 120 minutes.
+    // Floored at 60 so a code seconds from expiry never hands the router a
+    // zero or negative timeout.
+    $remaining = max(60, (int) $row['seconds_remaining']);
 
     $replyAttrs = radius_encode_attr(R_ATTR_SESSION_TIMEOUT, pack('N', $remaining))
                 . radius_encode_vsa(VENDOR_MIKROTIK, MT_UPTIME_LIMIT, pack('N', $remaining));
