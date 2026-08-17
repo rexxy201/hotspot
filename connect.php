@@ -94,7 +94,11 @@ try {
     // entries would show them the success page and then have RADIUS reject them.
     // issue_credential() is an idempotent upsert, so this refreshes the expiry
     // and picks up any change to the rate cap.
-    radius_add_user($db, $code, $settings);
+    // The router hands us the client MAC on its redirect, and index.php carries
+    // it through the form. Binding it to the credential is what lets a device
+    // that drops off the Wi-Fi reconnect later without re-typing its details.
+    $submittedMac = (string) ($_POST['mikrotik_mac'] ?? '');
+    radius_add_user($db, $code, $settings, $submittedMac);
 } catch (\Throwable $e) {
     error_log('connect.php: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
     http_response_code(500);
