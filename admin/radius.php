@@ -84,7 +84,10 @@ if (($_GET['download'] ?? '') === 'rsc') {
         '__RADIUS_SECRET__' => (string) $settings['radius_secret'],
         '__VPS_IP__' => (string) ($_SERVER['SERVER_ADDR'] ?? 'YOUR_SERVER_IP'),
         '__AUTH_PORT__' => (string) $settings['radius_auth_port'],
+        // Two different RouterOS namespaces, two different default names:
+        // "/ip hotspot profile" (server profile) vs "/ip hotspot user profile".
         '__HS_PROFILE__' => 'hsprof1',
+        '__HS_USER_PROFILE__' => 'default',
         '__PORTAL_HOST__' => $portalHost,
     ]);
     header('Content-Type: text/plain; charset=utf-8');

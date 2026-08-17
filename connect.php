@@ -84,15 +84,17 @@ try {
             }
             $code = $existing['code'];
         }
-        if ($existing === null) {
-            // create_entry() succeeded with no race — this is a newly
-            // created entry, so it needs a Wi-Fi credential. If this throws,
-            // it propagates straight to the outer catch below.
-            radius_add_user($db, $code, $settings);
-        }
     } else {
         $code = $existing['code'];
     }
+
+    // Issue or RENEW the Wi-Fi credential on every submission, not just for new
+    // entries. Credentials expire (session_minutes), so a returning attendee on
+    // day 2 has an entries row but no valid credential — issuing only for new
+    // entries would show them the success page and then have RADIUS reject them.
+    // issue_credential() is an idempotent upsert, so this refreshes the expiry
+    // and picks up any change to the rate cap.
+    radius_add_user($db, $code, $settings);
 } catch (\Throwable $e) {
     error_log('connect.php: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
     http_response_code(500);

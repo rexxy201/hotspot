@@ -20,7 +20,11 @@ $db->query('DELETE FROM wifi_credentials');
 save_settings($db, [
     'radius_secret' => $secret,
     'radius_auth_port' => (string) $port,
-    'radius_nas_ip' => '',           // empty = accept any source
+    // Must be a real address: the daemon refuses to start with this unset,
+    // because an unrestricted daemon lets any device brute-force codes over
+    // CHAP (which never involves the shared secret). The daemon's loopback
+    // bypass means this test's probes from 127.0.0.1 are accepted regardless.
+    'radius_nas_ip' => '127.0.0.1',
     'rate_limit' => '5M/5M',
 ]);
 issue_credential($db, '04829371', 60, '5M/5M');

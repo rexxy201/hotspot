@@ -15,16 +15,18 @@ There is **no FreeRADIUS to install**. The portal ships its own RADIUS daemon
 
 ```bash
 apt install -y nginx mysql-server composer \
-  php php-fpm php-mysqli php-curl php-sockets php-fileinfo php-mbstring
+  php php-fpm php-mysqli php-curl php-sockets php-fileinfo php-mbstring openssl
 ```
 
-`php-sockets` is required — the RADIUS daemon cannot run without it. Confirm:
+`php-sockets` is required — the RADIUS daemon cannot run without it. `openssl`
+is required too: it is what `setting_encrypt()` uses to encrypt the RADIUS
+shared secret at rest. Confirm:
 
 ```bash
-php -m | grep -E 'sockets|fileinfo|mysqli'
+php -m | grep -E 'sockets|fileinfo|mysqli|openssl'
 ```
 
-All three must be listed.
+All four must be listed.
 
 ## 3. Create the database
 
@@ -99,8 +101,12 @@ Open `https://<your-domain>/admin/`, log in, then go to **Wi-Fi & RADIUS**:
   RouterOS config line, so spaces, tabs, line breaks and other control
   characters are rejected by the form outright.
 - **Authentication port** — `1812`
-- **Router public IP** — the router's public IP. The daemon ignores packets
-  from anywhere else, so this must be right.
+- **Router public IP** — **required.** The router's public IP. The daemon
+  ignores packets from anywhere else, and it *refuses to start* while this is
+  blank. That is deliberate: CHAP authentication does not involve the shared
+  secret at all, so any device that can reach the daemon's UDP port could
+  brute-force attendee codes and get a definitive Accept/Reject without knowing
+  the secret.
 - **Session length** — minutes a code stays valid. `720` = 12 hours, one event day.
 - **Speed cap** — e.g. `5M/5M`, or blank for uncapped.
 
@@ -125,8 +131,9 @@ is why the unit ships with `StandardOutput=journal` (read it with
 `journalctl -u mangonet-radius`) and why `start_radius.sh` writes startup
 failures to a separate `logs/radius-startup.log`. Leave both as they are.
 
-Now click **Test** on the Wi-Fi & RADIUS page (reload it). It should report the
-daemon is up and answering. If not, the message names the exact fault.
+Now open the **Wi-Fi & RADIUS** page — the daemon status is checked each time it
+loads. It should report the daemon is up and answering. If not, the message
+names the exact fault.
 
 Without systemd, use the wrapper instead:
 
@@ -150,6 +157,20 @@ RADIUS is deliberately **not** open to the internet — only to the router.
 On the **Wi-Fi & RADIUS** page click **Download router config**. It produces a
 `.rsc` with your secret, server IP, port and portal host already filled in.
 
+**Confirm BOTH profile names before importing.** The config touches two
+different RouterOS objects in two different namespaces, and they have two
+different default names:
+
+```
+/ip hotspot profile print        # server profile — the `use-radius` line, default "hsprof1"
+/ip hotspot user profile print   # user profile   — the `shared-users` line, default "default"
+```
+
+If your **user** profile is not named `default`, edit that line in the `.rsc`
+before importing. `[find name=...]` matching nothing makes RouterOS `set`
+silently do nothing, so the one-device-per-code limit would simply not apply
+and you would get no error saying so.
+
 Upload it to the router and run:
 
 ```
@@ -157,7 +178,7 @@ Upload it to the router and run:
 ```
 
 The generated config includes
-`/ip hotspot user profile set [find name=hsprof1] shared-users=1`. That line is
+`/ip hotspot user profile set [find name=default] shared-users=1`. That line is
 what stops one code being used on several devices at once — it replaces the
 `Simultaneous-Use := 1` check the removed FreeRADIUS setup provided, and the
 daemon cannot enforce it itself until RADIUS accounting lands in a later stage.
@@ -165,12 +186,6 @@ If it is not set, one code works on unlimited devices simultaneously.
 
 Then point the hotspot login page at the portal so Mikrotik's redirect
 (carrying `mac`, `ip`, `link-login-only`, `link-orig`) lands on `index.php`.
-
-Check the profile name matches your router first:
-
-```
-/ip hotspot profile print
-```
 
 ## 10. End-to-end check
 
@@ -182,6 +197,11 @@ Check the profile name matches your router first:
 6. Watch **Admin → RADIUS Log** — an `ACCEPT` line should appear with the
    seconds remaining.
 7. Confirm the speed cap applies (run a speed test if you set one).
+8. **Try the same code on a SECOND device while the first is still connected.**
+   It must be refused. That is the only proof `shared-users=1` actually took
+   effect — if the second device gets online, the `set` matched no user profile
+   (see the profile-name check above) and one leaked code will work on
+   unlimited devices for the whole event.
 
 ## Troubleshooting
 

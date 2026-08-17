@@ -152,6 +152,11 @@ if ($secret === '') {
     exit(1);
 }
 
+if ($allowedNasIp === '') {
+    fwrite(STDERR, "[RADIUS] radius_nas_ip is not set. The daemon would accept RADIUS packets from any device on the network, and CHAP does not involve the shared secret — so any of them could brute-force attendee codes. Set the router's public IP in Admin -> Wi-Fi & RADIUS.\n");
+    exit(1);
+}
+
 if ($bindPort < 1 || $bindPort > 65535) {
     fwrite(STDERR, "[RADIUS] radius_auth_port is not a valid port ({$bindPort}). Set it in Admin -> Wi-Fi & RADIUS.\n");
     exit(1);
@@ -197,6 +202,11 @@ while (true) {
     if (is_file($restartFlag)) {
         if (@unlink($restartFlag)) {
             radius_log('Restart requested from the admin UI — exiting for the supervisor to respawn.');
+            // Drop the pid file on the way out, exactly as the SIGTERM handler
+            // does. A stale pid pointing at a dead process makes the
+            // diagnostics page report "it crashed or was killed" during the
+            // second or two between this exit and the supervisor's respawn.
+            @unlink(LOG_DIR . '/radius.pid');
             exit(0);
         }
         static $flagWarned = false;
@@ -220,11 +230,8 @@ while (true) {
                 $allowedNasIp = (string) $fresh['radius_nas_ip'];
             }
             $settings = $fresh;
-            // Re-state this every reload: an unrestricted daemon is a standing
-            // risk and a startup-only line scrolls away within minutes.
-            if ($allowedNasIp === '') {
-                radius_log('WARNING: radius_nas_ip is not set — accepting RADIUS packets from ANY source. Set the router IP in Admin -> Wi-Fi & RADIUS.');
-            }
+            // No "unrestricted" warning here: the daemon fails fast at startup
+            // when radius_nas_ip is empty, so it cannot be running in that state.
         } catch (Throwable $e) {
             radius_log('Could not reload settings: ' . $e->getMessage());
         }

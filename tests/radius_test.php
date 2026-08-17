@@ -30,4 +30,14 @@ assert_true($expiresIn > 5000 && $expiresIn <= 5400, 'the credential expires aft
 assert_true(radius_user_exists($db, '04829371'), 'radius_user_exists finds the issued code');
 assert_true(!radius_user_exists($db, '99999999'), 'radius_user_exists is false for an unknown code');
 
+// A returning attendee whose credential expired must get a fresh one. This is
+// the day-2 case: the entries row still exists, so connect.php takes the
+// duplicate path — which must still renew the credential.
+issue_credential($db, '77778888', -60);            // expired an hour ago
+assert_equals(null, find_valid_credential($db, '77778888'), 'the credential starts out expired');
+radius_add_user($db, '77778888', $settings);       // what connect.php now does on every submission
+$renewed = find_valid_credential($db, '77778888');
+assert_true($renewed !== null, 'radius_add_user renews an expired credential rather than leaving it dead');
+assert_true((int) $renewed['seconds_remaining'] > 5000, 'the renewed credential gets a full session again');
+
 test_summary();
