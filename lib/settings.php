@@ -12,6 +12,7 @@ const SETTINGS_DEFAULTS = [
     // --- RADIUS / Wi-Fi ---
     'radius_secret' => '',
     'radius_auth_port' => '1812',
+    'radius_acct_port' => '1813',
     'radius_nas_ip' => '',
     // How long a code stays valid for, in minutes. 720 = 12 hours, enough to
     // cover one event day.
