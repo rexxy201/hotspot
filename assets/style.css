@@ -639,3 +639,13 @@ td.code-cell {
   }
   button:active { transform: none; }
 }
+
+/* Diagnostic banner: the "all good" counterpart to .error. */
+.diag-ok {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: #B7F7D4;
+  background: #10321F;
+}
