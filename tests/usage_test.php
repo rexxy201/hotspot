@@ -38,7 +38,19 @@ assert_equals(14000, total_usage_bytes($db), 'total_usage_bytes sums every code'
 record_session_usage($db, 'sess-BIG', '77776666', 6000000000, 1000000000);
 assert_equals(7000000000, usage_bytes_for_code($db, '77776666'), 'usage above 4GB is stored and summed correctly');
 
+// The inviolable one: clearing usage must never reach the attendee's entries
+// row, which is their prize-draw entry. The SQL is plainly safe today; this
+// pins it so a future join or cascade cannot break it silently.
+require_once __DIR__ . '/../lib/entries.php';
+$db->query("DELETE FROM entries WHERE email = 'usage.invariant@example.com'");
+create_entry($db, 'Usage Invariant', '08011112222', 'usage.invariant@example.com', '11112222');
+
 reset_usage_for_code($db, '11112222');
+
+$entrySurvived = $db->query("SELECT code FROM entries WHERE email = 'usage.invariant@example.com'")->fetch_assoc();
+assert_true($entrySurvived !== null, 'resetting usage leaves the raffle entry in place');
+assert_equals('11112222', $entrySurvived['code'], 'the raffle entry keeps its code after a usage reset');
+$db->query("DELETE FROM entries WHERE email = 'usage.invariant@example.com'");
 assert_equals(0, usage_bytes_for_code($db, '11112222'), 'reset clears that code');
 assert_equals(1000, usage_bytes_for_code($db, '99998888'), 'reset leaves other codes alone');
 

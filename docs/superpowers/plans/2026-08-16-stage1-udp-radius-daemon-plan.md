@@ -8,6 +8,14 @@
 
 **Tech Stack:** PHP 8.4 CLI with `ext-sockets` and `ext-openssl`, MySQL 8 via mysqli, the project's existing custom test harness (`tests/bootstrap.php`), systemd (production) / `start_radius.sh` (any host).
 
+> **CORRECTION (2026-08-17).** The Mikrotik vendor attribute numbers written in
+> this plan are WRONG and were corrected in commit `cccc068`. Do not copy them.
+> Per FreeRADIUS `dictionary.mikrotik` (vendor 14988): Group is **3** (not 5),
+> Rate-Limit is **8** (not 9), Total-Limit-Gigawords is **18** (not 15), and
+> there is **no** Uptime-Limit attribute at all — session length rides on the
+> standard `Session-Timeout` (27). The wrong Rate-Limit number meant the speed
+> cap was silently ignored by the router.
+
 ## Global Constraints
 
 - All DB queries use `mysqli` prepared statements — no string-concatenated SQL, anywhere.
