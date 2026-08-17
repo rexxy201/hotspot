@@ -11,3 +11,15 @@ CREATE TABLE IF NOT EXISTS wifi_credentials (
   KEY idx_wifi_mac (mac),
   KEY idx_wifi_expires (expires_at)
 );
+
+CREATE TABLE IF NOT EXISTS radius_sessions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  session_id VARCHAR(64) NOT NULL,
+  username VARCHAR(64) NOT NULL,
+  input_octets BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  output_octets BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_session (session_id),
+  KEY idx_session_user (username)
+);

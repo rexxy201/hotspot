@@ -31,6 +31,28 @@ CREATE TABLE IF NOT EXISTS wifi_credentials (
   KEY idx_wifi_expires (expires_at)
 );
 
+-- One row per RADIUS accounting session.
+--
+-- The router reports ABSOLUTE counters for a session on every interim update,
+-- not deltas, so we upsert on session_id and overwrite. A retransmitted or
+-- duplicated packet is then harmless — it writes the same numbers again
+-- instead of double-counting, and no delta arithmetic is needed anywhere.
+--
+-- Deleting rows here resets a code's usage. It never touches `entries`.
+CREATE TABLE IF NOT EXISTS radius_sessions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  session_id VARCHAR(64) NOT NULL,
+  username VARCHAR(64) NOT NULL,
+  -- BIGINT: the 32-bit wire counters are combined with their gigawords
+  -- companion before they get here, so these hold the true total.
+  input_octets BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  output_octets BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_session (session_id),
+  KEY idx_session_user (username)
+);
+
 INSERT INTO settings (setting_key, setting_value) VALUES
   ('event_name', 'Edo Youth Impact Forum 2026'),
   ('event_tagline', 'Empowered Youth, Transformed Future'),
