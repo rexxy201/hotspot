@@ -2,12 +2,47 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../lib/csv.php';
+require_once __DIR__ . '/../lib/credentials.php';
 require_once __DIR__ . '/../lib/settings.php';
 require_once __DIR__ . '/layout.php';
 require_admin_session();
 
 $db = get_db();
-$result = $db->query('SELECT name, phone, email, code, created_at FROM entries ORDER BY created_at DESC');
+
+// Revoke a code's Wi-Fi access.
+//
+// This deletes ONLY the wifi_credentials row. The attendee's entries row is
+// their prize-draw entry and must survive — cutting someone's Wi-Fi must never
+// cost them the draw.
+//
+// Handled before any output so the redirect below can send headers. The
+// redirect is a POST/redirect/GET: without it, refreshing the page after a
+// revoke would silently re-submit it.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'revoke') {
+    $code = trim((string) ($_POST['code'] ?? ''));
+    // Codes are 8 numeric digits. revoke_credential() uses a prepared
+    // statement, so this is not an injection guard — it stops a malformed
+    // request deleting something that was never a code.
+    if (preg_match('/^[0-9]{8}$/', $code) === 1) {
+        revoke_credential($db, $code);
+        header('Location: entries.php?revoked=' . urlencode($code));
+    } else {
+        header('Location: entries.php?error=badcode');
+    }
+    exit;
+}
+
+// `seconds_remaining` is computed by MySQL, never in PHP: this deployment runs
+// PHP and MySQL in different timezones, so date arithmetic on expires_at here
+// would be wrong by the offset.
+$result = $db->query(
+    'SELECT e.name, e.phone, e.email, e.code, e.created_at,
+            c.expires_at,
+            TIMESTAMPDIFF(SECOND, NOW(), c.expires_at) AS seconds_remaining
+       FROM entries e
+       LEFT JOIN wifi_credentials c ON c.username = e.code
+      ORDER BY e.created_at DESC'
+);
 
 if (($_GET['export'] ?? '') === 'csv') {
     header('Content-Type: text/csv');
@@ -27,6 +62,27 @@ if (($_GET['export'] ?? '') === 'csv') {
     exit;
 }
 
+$notice = '';
+$error = '';
+$revoked = trim((string) ($_GET['revoked'] ?? ''));
+if (preg_match('/^[0-9]{8}$/', $revoked) === 1) {
+    $notice = "Wi-Fi access revoked for code {$revoked}. Their raffle entry is untouched.";
+}
+if (($_GET['error'] ?? '') === 'badcode') {
+    $error = 'That was not a valid code, so nothing was revoked.';
+}
+
+/** How long is left on a credential, in words. */
+function format_remaining(int $seconds): string
+{
+    if ($seconds >= 3600) {
+        $hours = intdiv($seconds, 3600);
+        $minutes = intdiv($seconds % 3600, 60);
+        return $minutes > 0 ? "{$hours}h {$minutes}m left" : "{$hours}h left";
+    }
+    return max(1, intdiv($seconds, 60)) . 'm left';
+}
+
 $settings = get_settings($db);
 admin_layout_start('entries.php', 'Raffle Entries', $settings);
 ?>
@@ -40,6 +96,9 @@ admin_layout_start('entries.php', 'Raffle Entries', $settings);
   </div>
 </div>
 
+<?php if ($notice !== ''): ?><p class="warning"><?= htmlspecialchars($notice, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p><?php endif; ?>
+<?php if ($error !== ''): ?><p class="error" role="alert"><?= htmlspecialchars($error, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p><?php endif; ?>
+
 <section class="panel">
   <?php if ($result->num_rows === 0): ?>
     <p class="empty">No entries yet. They'll appear here as attendees connect to the Wi-Fi.</p>
@@ -47,21 +106,53 @@ admin_layout_start('entries.php', 'Raffle Entries', $settings);
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Name</th><th>Phone</th><th>Email</th><th>Code</th><th>Submitted</th></tr>
+          <tr>
+            <th>Name</th><th>Phone</th><th>Email</th><th>Code</th>
+            <th>Submitted</th><th>Wi-Fi</th><th></th>
+          </tr>
         </thead>
         <tbody>
         <?php while ($row = $result->fetch_assoc()): ?>
+          <?php
+            $remaining = $row['seconds_remaining'] === null ? null : (int) $row['seconds_remaining'];
+            $isActive = $remaining !== null && $remaining > 0;
+          ?>
           <tr>
-            <td><?= htmlspecialchars($row['name']) ?></td>
-            <td><?= htmlspecialchars($row['phone']) ?></td>
-            <td><?= htmlspecialchars($row['email']) ?></td>
-            <td class="code-cell"><?= htmlspecialchars($row['code']) ?></td>
-            <td><?= htmlspecialchars($row['created_at']) ?></td>
+            <td><?= htmlspecialchars($row['name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
+            <td><?= htmlspecialchars($row['phone'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
+            <td><?= htmlspecialchars($row['email'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
+            <td class="code-cell"><?= htmlspecialchars($row['code'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
+            <td><?= htmlspecialchars($row['created_at'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
+            <td>
+              <?php if ($isActive): ?>
+                <span class="pill pill-active">Active</span>
+                <span class="pill-note"><?= htmlspecialchars(format_remaining($remaining), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></span>
+              <?php elseif ($remaining !== null): ?>
+                <span class="pill">Expired</span>
+              <?php else: ?>
+                <span class="pill">None</span>
+              <?php endif; ?>
+            </td>
+            <td>
+              <?php if ($isActive): ?>
+                <form method="post"
+                      onsubmit="return confirm('Revoke Wi-Fi for code <?= htmlspecialchars($row['code'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>?\n\nTheir raffle entry is kept. They can reconnect by filling in the portal form again.')">
+                  <input type="hidden" name="action" value="revoke">
+                  <input type="hidden" name="code" value="<?= htmlspecialchars($row['code'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
+                  <button type="submit" class="btn-inline btn-danger">Revoke</button>
+                </form>
+              <?php endif; ?>
+            </td>
           </tr>
         <?php endwhile; ?>
         </tbody>
       </table>
     </div>
+    <p class="table-note">
+      Revoking deletes only the Wi-Fi credential — the raffle entry is always kept.
+      The device drops at the router's session timeout rather than instantly, and the
+      attendee can get a new code by filling in the portal form again.
+    </p>
   <?php endif; ?>
 </section>
 <?php admin_layout_end(); ?>

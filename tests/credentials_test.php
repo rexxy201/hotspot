@@ -39,4 +39,21 @@ touch_credential($db, '11112222');
 $touched = $db->query("SELECT last_used_at FROM wifi_credentials WHERE username = '11112222'")->fetch_assoc();
 assert_true($touched['last_used_at'] !== null, 'touch_credential records last_used_at');
 
+// Revoking Wi-Fi must NEVER cost the attendee their prize-draw entry. The code
+// is both the RADIUS credential and the raffle ticket, so this is the one
+// invariant the admin revoke button must not break.
+require_once __DIR__ . '/../lib/entries.php';
+$db->query("DELETE FROM entries WHERE email = 'revoke.test@example.com'");
+create_entry($db, 'Revoke Test', '08099998888', 'revoke.test@example.com', '31313131');
+issue_credential($db, '31313131', 60);
+assert_true(find_valid_credential($db, '31313131') !== null, 'the credential exists before revoking');
+
+revoke_credential($db, '31313131');
+
+assert_equals(null, find_valid_credential($db, '31313131'), 'revoke_credential removes the wifi credential');
+$stillThere = $db->query("SELECT code FROM entries WHERE email = 'revoke.test@example.com'")->fetch_assoc();
+assert_true($stillThere !== null, 'revoking leaves the raffle entry in place');
+assert_equals('31313131', $stillThere['code'], 'the raffle entry keeps its original code after revoking');
+$db->query("DELETE FROM entries WHERE email = 'revoke.test@example.com'");
+
 test_summary();

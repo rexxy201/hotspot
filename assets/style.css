@@ -681,3 +681,44 @@ td.code-cell {
   background: transparent;
   border: 1px solid var(--admin-border);
 }
+
+/* Status pills and the revoke control on the entries table. */
+.pill {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--admin-text-muted);
+  background: var(--admin-bg);
+  border: 1px solid var(--admin-border);
+}
+
+.pill-active {
+  color: #B7F7D4;
+  background: #10321F;
+  border-color: #1B5334;
+}
+
+.pill-note {
+  margin-left: var(--space-2);
+  font-size: 12px;
+  color: var(--admin-text-muted);
+}
+
+.btn-danger {
+  color: #FFD9D5;
+  background: #5B1A15;
+  border: 1px solid #7A241D;
+}
+
+.btn-danger:hover { filter: brightness(1.15); }
+
+.table-note {
+  margin: var(--space-3) 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--admin-text-muted);
+}
