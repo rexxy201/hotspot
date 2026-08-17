@@ -25,11 +25,28 @@ const R_ATTR_SESSION_TIMEOUT = 27;
 const R_ATTR_CALLING_STATION = 31;  // the client MAC
 const R_ATTR_CHAP_CHALLENGE  = 60;
 
+// Accounting attributes (RFC 2866).
+const R_ATTR_ACCT_STATUS_TYPE      = 40;
+const R_ATTR_ACCT_INPUT_OCTETS     = 42;
+const R_ATTR_ACCT_OUTPUT_OCTETS    = 43;
+const R_ATTR_ACCT_SESSION_ID       = 44;
+// Counters are 32-bit and wrap at 4GB; these carry the overflow.
+const R_ATTR_ACCT_INPUT_GIGAWORDS  = 52;
+const R_ATTR_ACCT_OUTPUT_GIGAWORDS = 53;
+
+// Acct-Status-Type values.
+const ACCT_START   = 1;
+const ACCT_STOP    = 2;
+const ACCT_INTERIM = 3;
+
 // Mikrotik vendor-specific attributes.
 const VENDOR_MIKROTIK = 14988;
 const MT_GROUP        = 5;  // hotspot user profile / group
 const MT_UPTIME_LIMIT = 7;  // session seconds
 const MT_RATE_LIMIT   = 9;  // e.g. "5M/5M"
+
+const MT_TOTAL_LIMIT           = 17; // combined byte limit for the session
+const MT_TOTAL_LIMIT_GIGAWORDS = 15; // its 2^32 multiplier, for limits over 4GB
 
 /**
  * Split a RADIUS attribute blob into [type => value].
@@ -146,4 +163,34 @@ function radius_check_chap(string $chapPassword, string $challenge, string $plai
     $chapId = substr($chapPassword, 0, 1);
     $response = substr($chapPassword, 1, 16);
     return hash_equals(md5($chapId . $plainPassword . $challenge, true), $response);
+}
+
+/**
+ * Decode a 4-byte big-endian RADIUS integer.
+ *
+ * Returns 0 for anything malformed: these values come off the wire, and a
+ * short attribute must not throw inside the daemon's packet loop.
+ */
+function radius_uint32(string $value): int
+{
+    if (strlen($value) !== 4) {
+        return 0;
+    }
+    return (int) unpack('N', $value)[1];
+}
+
+/**
+ * Fold a 32-bit octet counter together with its gigawords companion.
+ *
+ * RADIUS octet counters are 32-bit and wrap at 4GB; the router reports how
+ * many times they wrapped in a separate attribute. The true total is
+ * gigawords * 2^32 + octets. Reading the octets alone makes a 5GB transfer
+ * look like 1GB — so the quota would never fire for the heaviest users, which
+ * are exactly the ones it exists to stop.
+ */
+function radius_octets_64(array $attrs, int $octetsAttr, int $gigawordsAttr): int
+{
+    $octets = radius_uint32($attrs[$octetsAttr] ?? '');
+    $gigawords = radius_uint32($attrs[$gigawordsAttr] ?? '');
+    return ($gigawords * 4294967296) + $octets;
 }

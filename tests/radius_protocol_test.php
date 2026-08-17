@@ -72,4 +72,31 @@ assert_equals(255, ord($hugeVsa[1]), 'the capped VSA declares a valid outer leng
 $vsaInner = radius_parse_attributes($hugeVsa)[R_ATTR_VENDOR_SPECIFIC];
 assert_equals(247, strlen(substr($vsaInner, 6)), 'the capped VSA inner value is truncated to 247 bytes');
 
+// --- accounting counters -------------------------------------------------
+assert_equals(0, radius_uint32(''), 'an empty value decodes to zero');
+assert_equals(0, radius_uint32('abc'), 'a short value decodes to zero');
+assert_equals(1000, radius_uint32(pack('N', 1000)), 'a 4-byte value decodes');
+assert_equals(4294967295, radius_uint32(pack('N', 4294967295)), 'the full 32-bit range decodes unsigned');
+
+// Octets alone, no gigawords attribute present.
+$attrs = [R_ATTR_ACCT_INPUT_OCTETS => pack('N', 5000)];
+assert_equals(5000, radius_octets_64($attrs, R_ATTR_ACCT_INPUT_OCTETS, R_ATTR_ACCT_INPUT_GIGAWORDS), 'octets without gigawords is just the octets');
+
+// THE case this function exists for: past 4GB the router splits the value.
+// Ignoring gigawords would report 1000 bytes for a 4GB transfer.
+$attrs = [
+    R_ATTR_ACCT_INPUT_OCTETS => pack('N', 1000),
+    R_ATTR_ACCT_INPUT_GIGAWORDS => pack('N', 1),
+];
+assert_equals(4294968296, radius_octets_64($attrs, R_ATTR_ACCT_INPUT_OCTETS, R_ATTR_ACCT_INPUT_GIGAWORDS), 'gigawords are folded in as 2^32 each');
+
+$attrs = [
+    R_ATTR_ACCT_INPUT_OCTETS => pack('N', 0),
+    R_ATTR_ACCT_INPUT_GIGAWORDS => pack('N', 3),
+];
+assert_equals(12884901888, radius_octets_64($attrs, R_ATTR_ACCT_INPUT_OCTETS, R_ATTR_ACCT_INPUT_GIGAWORDS), 'three gigawords is 12GB');
+
+// Nothing present at all.
+assert_equals(0, radius_octets_64([], R_ATTR_ACCT_INPUT_OCTETS, R_ATTR_ACCT_INPUT_GIGAWORDS), 'missing counters read as zero');
+
 test_summary();
