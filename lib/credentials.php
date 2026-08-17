@@ -94,10 +94,17 @@ function count_active_credentials(mysqli $db): int
  */
 function normalize_mac(string $mac): string
 {
-    $hex = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', $mac));
-    if (strlen($hex) !== 12) {
+    // Validate the SHAPE before stripping separators. Stripping first would
+    // silently reduce a malformed value (a 7-octet string, a vendor-prefixed
+    // one) to a plausible but WRONG 12-hex MAC, which issue_credential() would
+    // then store — letting a different, real device with that MAC later resume
+    // on someone else's credential.
+    $candidate = strtoupper(trim($mac));
+    if (preg_match('/^[0-9A-F]{2}([:-][0-9A-F]{2}){5}$/', $candidate) !== 1
+        && preg_match('/^[0-9A-F]{12}$/', $candidate) !== 1) {
         return '';
     }
+    $hex = preg_replace('/[^0-9A-F]/', '', $candidate);
     return implode(':', str_split($hex, 2));
 }
 
@@ -114,11 +121,19 @@ function find_valid_credential_by_mac(mysqli $db, string $mac): ?array
     if ($normalised === '') {
         return null;
     }
+    // ORDER BY is load bearing here, unlike in find_valid_credential(): `mac` is
+    // a non-unique KEY, so more than one valid credential can be bound to the
+    // same device (issue_credential() upserts on the code, not the MAC). Without
+    // an explicit ordering the optimiser may return the older, nearly-expired
+    // row, and its seconds_remaining becomes the RADIUS Session-Timeout — cutting
+    // the attendee off early. Resuming must pick the credential with the most
+    // time left.
     $stmt = $db->prepare(
         'SELECT id, username, password, mac, rate_limit, expires_at,
                 TIMESTAMPDIFF(SECOND, NOW(), expires_at) AS seconds_remaining
            FROM wifi_credentials
           WHERE mac = ? AND expires_at > NOW()
+          ORDER BY expires_at DESC, id DESC
           LIMIT 1'
     );
     $stmt->bind_param('s', $normalised);

@@ -68,6 +68,12 @@ assert_equals('', normalize_mac(''), 'an empty MAC normalises to empty');
 assert_equals('', normalize_mac('not-a-mac'), 'a non-MAC normalises to empty');
 assert_equals('', normalize_mac('AA:BB:CC:DD:EE'), 'a short MAC normalises to empty');
 assert_equals('', normalize_mac('AA:BB:CC:DD:EE:FF:00'), 'an over-long MAC normalises to empty');
+// These are the malformed shapes that a strip-then-measure normaliser silently
+// accepted: each reduces to exactly 12 hex characters and so looked valid.
+assert_equals('', normalize_mac('AA:BB:CC:DD:EE:FF:GG'), 'a 7-octet MAC with a non-hex octet is rejected, not truncated');
+assert_equals('', normalize_mac('zzAA:BB:CC:DD:EE:FF'), 'a prefixed MAC is rejected, not stripped');
+assert_equals('', normalize_mac('GAAAAAAAAAAAA'), 'a 13-character value with one non-hex char is rejected');
+assert_equals('', normalize_mac('AA:BB:CC:DD:EE:FG'), 'a non-hex character inside an octet is rejected');
 
 // --- lookup by MAC -------------------------------------------------------
 $db->query('DELETE FROM wifi_credentials');
@@ -91,5 +97,15 @@ assert_equals(null, find_valid_credential_by_mac($db, 'BB:BB:BB:BB:BB:BB'), 'an 
 // An empty MAC must never match a row, including rows with a NULL mac.
 issue_credential($db, '56785678', 60);   // no MAC bound
 assert_equals(null, find_valid_credential_by_mac($db, ''), 'an empty MAC matches nothing');
+
+// Two valid credentials can share one MAC (issue_credential upserts on the
+// code, not the device), so the lookup must deterministically return the one
+// with the most time left — otherwise a returning device can be resumed on a
+// nearly-expired credential and cut off early.
+$db->query('DELETE FROM wifi_credentials');
+issue_credential($db, '11112222', 30,  null, 'CC:CC:CC:CC:CC:CC');   // expires sooner
+issue_credential($db, '33334444', 600, null, 'CC:CC:CC:CC:CC:CC');   // expires later
+$best = find_valid_credential_by_mac($db, 'CC:CC:CC:CC:CC:CC');
+assert_equals('33334444', $best['username'], 'the MAC lookup returns the credential with the most time left');
 
 test_summary();
