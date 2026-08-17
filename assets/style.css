@@ -254,14 +254,90 @@ body {
   box-shadow: var(--shadow-card);
 }
 
-/* Grows to fill the space below the banner, so the button centres in the
-   middle of the screen rather than sitting right under the image. */
-.hero-cta {
+/* --------------------------------------------------------------------------
+   Hero copy — the welcome/sponsor/prize story between the banner and the
+   button, and the prize call-out after it. Sized to fit inside one 100dvh
+   screen on a typical phone without scrolling (checked against real
+   viewport heights, not assumed) — spacing here is deliberately tighter
+   than the vertical rhythm used elsewhere, so don't "fix" it to match.
+   -------------------------------------------------------------------------- */
+
+.hero-rule {
+  width: 100%;
+  height: 1px;
+  margin: var(--space-3) 0;
+  border: none;
+  background: var(--color-border);
+}
+
+.hero-welcome {
+  margin: 0 0 var(--space-2);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+.hero-welcome-accent { color: var(--brand-color); }
+.hero-welcome-accent2 { color: var(--color-accent-text); }
+
+.hero-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
+}
+
+.hero-divider .divider-line {
   flex: 1 1 auto;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.hero-divider .divider-icon {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  color: var(--color-accent);
+}
+
+.hero-divider .divider-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.hero-copy {
+  margin: 0 0 var(--space-2);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.hero-shout {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  text-transform: uppercase;
+  color: var(--brand-color);
+}
+
+.hero-shout-sm {
+  margin: var(--space-2) 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--brand-color);
+}
+
+.hero-cta {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-5) 0;
+  margin: var(--space-2) 0;
 }
 
 .btn-connect-win {
@@ -813,15 +889,25 @@ td.code-cell {
 
 /* Short viewports (small/older phones, or landscape) trade some of the
    logo's size back for fit, so the Connect button stays above the fold.
-   Keyed on height rather than width: it's vertical space that runs out. */
-@media (max-height: 640px) {
+   Keyed on height rather than width: it's vertical space that runs out.
+   Threshold checked against a real iPhone SE-class viewport (375x667) —
+   the hero copy below overflowed there at the base sizing, so 640px alone
+   wasn't a low enough bar. */
+@media (max-height: 700px) {
   .portal { padding: var(--space-2) var(--space-4); }
   .portal-card { padding: var(--space-4); }
   .logo { max-width: 208px; margin-bottom: var(--space-2); }
   .details { margin-bottom: var(--space-3); }
-  .powered-by { margin-top: var(--space-3); }
+  .powered-by { margin-top: var(--space-2); }
   .powered-by img { height: 26px; }
-  .hero-banner { margin-bottom: var(--space-3); }
+  .hero-banner { margin-bottom: var(--space-2); }
+  .hero-rule { margin: var(--space-2) 0; }
+  .hero-welcome { font-size: 20px; margin-bottom: var(--space-1); }
+  .hero-divider { margin: var(--space-2) 0; }
+  .hero-copy { font-size: 14px; line-height: 1.4; margin-bottom: var(--space-1); }
+  .hero-shout { font-size: 15px; }
+  .hero-shout-sm { font-size: 14px; margin-top: var(--space-1); }
+  .hero-cta { margin: var(--space-1) 0; }
 }
 
 @media (min-width: 640px) {

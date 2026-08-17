@@ -7,6 +7,8 @@
  * new sections only need adding to ADMIN_NAV below.
  */
 
+require_once __DIR__ . '/../lib/assets.php';
+
 const ADMIN_NAV = [
     ['file' => 'index.php',      'label' => 'Dashboard',        'icon' => 'grid'],
     ['file' => 'entries.php',    'label' => 'Raffle Entries',   'icon' => 'list'],
@@ -41,7 +43,7 @@ function admin_layout_start(string $activeFile, string $title, array $settings =
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= htmlspecialchars($title) ?> — Admin</title>
-<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="<?= asset_url(__DIR__ . '/..', 'assets/style.css') ?>">
 </head>
 <body class="admin-body">
 <div class="admin-shell">

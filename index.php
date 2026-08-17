@@ -2,6 +2,7 @@
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/lib/settings.php';
 require_once __DIR__ . '/lib/credentials.php';
+require_once __DIR__ . '/lib/assets.php';
 
 $db = get_db();
 $settings = get_settings($db);
@@ -66,7 +67,7 @@ if (!$forget && $settings['silent_login_enabled'] === '1' && $mikrotikParams['ma
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= htmlspecialchars($settings['event_name']) ?> Wi-Fi</title>
-<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="<?= asset_url(__DIR__, 'assets/style.css') ?>">
 <style>:root { --brand-color: <?= htmlspecialchars($settings['brand_color']) ?>; }</style>
 </head>
 <body>
@@ -108,11 +109,54 @@ if (!$forget && $settings['silent_login_enabled'] === '1' && $mikrotikParams['ma
     <img class="hero-banner" src="<?= htmlspecialchars($settings['hero_banner_path']) ?>" alt="<?= htmlspecialchars($settings['event_name']) ?>">
   <?php endif; ?>
 
-  <?php // Grows to fill the space below the banner so the button lands in
-        // the middle of the screen rather than immediately under it. ?>
+  <hr class="hero-rule">
+
+  <h2 class="hero-welcome">Welcome to <span class="hero-welcome-accent">EYIF <span class="hero-welcome-accent2">2.0</span>!</span></h2>
+
+  <div class="hero-divider">
+    <span class="divider-line"></span><span class="divider-dot"></span><span class="divider-line"></span>
+  </div>
+
+  <p class="hero-copy">Free Wi-Fi brought to you<br>by proud sponsors.</p>
+
+  <div class="hero-divider">
+    <span class="divider-line"></span>
+    <svg class="divider-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
+    </svg>
+    <span class="divider-line"></span>
+  </div>
+
+  <p class="hero-copy">Connect and stand a chance<br>to win amazing prizes.</p>
+
+  <?php // Button sits in normal document flow now — there's real content
+        // both above and below it (the page scrolls), so it no longer
+        // needs to flex-grow into the leftover space the way it did when
+        // the banner + button were the only things on the page. ?>
   <div class="hero-cta">
     <button type="button" id="open-connect-modal" class="btn-connect-win"><?= htmlspecialchars($settings['cta_button_text']) ?></button>
   </div>
+
+  <div class="hero-divider">
+    <span class="divider-line"></span>
+    <svg class="divider-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8"/><path d="M16.5 8a2.5 2.5 0 0 0 0-5C13 3 12 8 12 8"/>
+    </svg>
+    <span class="divider-line"></span>
+  </div>
+
+  <p class="hero-shout">Amazing prizes to be won!</p>
+
+  <div class="hero-divider">
+    <span class="divider-line"></span>
+    <svg class="divider-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3a2 2 0 0 1 2 2 4 4 0 0 1-4 4"/><path d="M7 5H4a2 2 0 0 0-2 2 4 4 0 0 0 4 4"/>
+    </svg>
+    <span class="divider-line"></span>
+  </div>
+
+  <p class="hero-copy">Your connection could be your winning moment.</p>
+  <p class="hero-shout-sm">Stay connected. Stay inspired. Stay impactful.</p>
 
   <?php // The sign-up form lives here, hidden until "Connect to Win" opens it.
         // Submitting still posts straight to connect.php — the success/
@@ -146,9 +190,17 @@ if (!$forget && $settings['silent_login_enabled'] === '1' && $mikrotikParams['ma
   </div>
   <?php endif; ?>
 
-  <?php if ($settings['powered_by_logo_path']): ?>
-    <p class="powered-by">Powered by <img src="<?= htmlspecialchars($settings['powered_by_logo_path']) ?>" alt="MangoNet"></p>
-  <?php endif; ?>
+  <?php // Always shown now (the mockup this matches has it as a fixed
+        // footer line): falls back to plain text until an admin uploads
+        // an actual logo via Branding Settings, then swaps to the image
+        // automatically. ?>
+  <p class="powered-by">Powered by
+    <?php if ($settings['powered_by_logo_path']): ?>
+      <img src="<?= htmlspecialchars($settings['powered_by_logo_path']) ?>" alt="<?= htmlspecialchars(COMPANY_NAME) ?>">
+    <?php else: ?>
+      <strong><?= htmlspecialchars(COMPANY_NAME) ?></strong>
+    <?php endif; ?>
+  </p>
 </div>
 <script>
 (function () {
