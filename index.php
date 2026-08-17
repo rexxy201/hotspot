@@ -76,7 +76,8 @@ if (!$forget && $settings['silent_login_enabled'] === '1' && $mikrotikParams['ma
       <?php endif; ?>
       <h1>Welcome back</h1>
       <p class="intro">Reconnecting you to <?= htmlspecialchars($settings['event_name']) ?> Wi-Fi…</p>
-      <?php // The code is deliberately NOT shown here — see the note above. ?>
+      <?php // Not rendered as visible text, but present in the hidden fields
+            // below — it has to be, to reach the router. See the note above. ?>
       <form id="silent-login" method="POST" action="<?= htmlspecialchars($silentLoginUrl) ?>">
         <input type="hidden" name="username" value="<?= htmlspecialchars($silentCode) ?>">
         <input type="hidden" name="password" value="<?= htmlspecialchars($silentCode) ?>">

@@ -25,7 +25,7 @@
 Three decisions follow, and every task must preserve them:
 
 1. **Silent login never issues or renews a credential.** It only *reuses* one that is already valid. A forged MAC therefore cannot resurrect an expired credential or create a new one — it can only ride a session that already exists. This is why the "expired → show the form" behaviour is a security property, not just a UX choice.
-2. **The silent path never displays the code.** The normal success page shows the code because the attendee needs it for the prize draw. On the silent path the code is only ever placed in the hidden fields posted to the router. Spoofing a MAC then yields Wi-Fi that was free anyway, not another attendee's raffle entry.
+2. **The silent path does not display the code, but cannot hide it.** It goes into the hidden fields posted to the router, because that is the only way a browser can be logged in. Anyone who can craft the request can read it from the page source, so this is presentation, not a control. Rule 1 is what actually contains a forged MAC. Fully closing the exposure needs a device credential distinct from the raffle code — a separate decision, not part of this stage.
 3. **The toggle is a kill switch.** If MAC handling misbehaves on the day, staff turn it off from the admin and every device falls back to the form.
 
 ## File Structure
@@ -590,9 +590,13 @@ Two limits are deliberate:
 - **An expired code always gets the form.** The device MAC arrives in the URL
   and cannot be verified from the portal, so silent reconnect only ever reuses a
   credential that is already valid. It never issues or renews one.
-- **The code is not shown on the reconnect screen.** It is posted to the router
-  but never displayed, so a spoofed MAC yields Wi-Fi that was free anyway rather
-  than another attendee's prize-draw code.
+- **The code is not displayed on the reconnect screen, but it is not secret from
+  whoever made the request.** The credential has to travel through the browser to
+  reach the router, so it sits in that page's hidden fields. Someone who already
+  knows a device's MAC can therefore learn that attendee's code. It buys Wi-Fi
+  that is free anyway and does not let them claim the prize — the draw is run
+  from the admin's name/phone/email list — but it does let them consume that
+  attendee's single allowed session.
 
 Attendees who lent their phone to someone can use **Not you? Sign in with your
 own details** to reach the form.
