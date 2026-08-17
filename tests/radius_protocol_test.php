@@ -111,4 +111,20 @@ assert_equals(17, MT_TOTAL_LIMIT, 'Mikrotik-Total-Limit is 17');
 assert_equals(18, MT_TOTAL_LIMIT_GIGAWORDS, 'Mikrotik-Total-Limit-Gigawords is 18 (15 is Xmit-Limit-Gigawords)');
 assert_true(!defined('MT_UPTIME_LIMIT'), 'there is no Mikrotik uptime-limit attribute; session length uses the standard Session-Timeout');
 
+// --- accounting authenticator -------------------------------------------
+$acctSecret = 'shared-secret-here';
+$acctBody = radius_encode_attr(R_ATTR_ACCT_SESSION_ID, 'sess-1')
+          . radius_encode_attr(R_ATTR_USER_NAME, '12345678');
+$acctHeader = chr(R_ACCOUNTING_REQUEST) . chr(7) . pack('n', 20 + strlen($acctBody));
+$acctAuth = md5($acctHeader . str_repeat("\x00", 16) . $acctBody . $acctSecret, true);
+$goodPacket = $acctHeader . $acctAuth . $acctBody;
+
+assert_true(radius_verify_accounting($goodPacket, $acctSecret), 'a correctly signed Accounting-Request verifies');
+assert_true(!radius_verify_accounting($goodPacket, 'wrong-secret'), 'a wrong shared secret fails verification');
+assert_true(!radius_verify_accounting(substr($goodPacket, 0, 19), $acctSecret), 'a runt packet fails verification rather than throwing');
+// Tamper with a counter byte: the signature must no longer match.
+$tampered = $goodPacket;
+$tampered[strlen($tampered) - 1] = chr(ord($tampered[strlen($tampered) - 1]) ^ 0xFF);
+assert_true(!radius_verify_accounting($tampered, $acctSecret), 'a tampered packet fails verification');
+
 test_summary();

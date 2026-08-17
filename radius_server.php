@@ -303,6 +303,15 @@ while (true) {
             $attrs = radius_parse_attributes(substr($buf, 20, $declaredLength - 20));
 
             if ($code === R_ACCOUNTING_REQUEST) {
+                // Verify before doing anything else. An unauthenticated packet is
+                // dropped silently and NOT acknowledged — acknowledging would tell
+                // an attacker their guess was accepted, and there is no legitimate
+                // sender that cannot compute this.
+                if (!radius_verify_accounting(substr($buf, 0, $declaredLength), $secret)) {
+                    radius_log('Ignored Accounting-Request with a bad authenticator from ' . $from);
+                    continue;
+                }
+
                 $sessionId = $attrs[R_ATTR_ACCT_SESSION_ID] ?? '';
                 $acctUser = $attrs[R_ATTR_USER_NAME] ?? '';
                 $statusType = radius_uint32($attrs[R_ATTR_ACCT_STATUS_TYPE] ?? '');

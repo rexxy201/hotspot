@@ -121,6 +121,26 @@ function radius_build_reply(int $code, int $id, string $requestAuthenticator, st
 }
 
 /**
+ * Verify an Accounting-Request's authenticator (RFC 2866).
+ *
+ * Unlike Access-Request, an Accounting-Request IS authenticated: the
+ * authenticator is MD5 over the packet with the authenticator field zeroed,
+ * plus the shared secret. Checking it is what stops anyone who can reach the
+ * socket from writing usage rows — the source-IP allowlist alone is an
+ * unauthenticated check, and forged usage can disconnect an attendee once a
+ * data quota is enforced.
+ */
+function radius_verify_accounting(string $packet, string $secret): bool
+{
+    if (strlen($packet) < 20) {
+        return false;
+    }
+    $received = substr($packet, 4, 16);
+    $zeroed = substr($packet, 0, 4) . str_repeat("\x00", 16) . substr($packet, 20);
+    return hash_equals(md5($zeroed . $secret, true), $received);
+}
+
+/**
  * Reverse RFC 2865's PAP obfuscation.
  *
  * b1 = MD5(secret + request authenticator); p1 = c1 XOR b1
