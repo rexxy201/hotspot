@@ -649,3 +649,35 @@ td.code-cell {
   color: #B7F7D4;
   background: #10321F;
 }
+
+.log-view {
+  max-height: 460px;
+  overflow: auto;
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--admin-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-sm);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--admin-text-muted);
+}
+
+/* Buttons that sit inline in a header row, rather than filling a form. */
+.btn-inline {
+  width: auto;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 var(--space-4);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.btn-inline.secondary {
+  color: var(--admin-text);
+  background: transparent;
+  border: 1px solid var(--admin-border);
+}
