@@ -23,4 +23,11 @@ assert_equals('0', get_settings($db)['silent_login_enabled'], 'silent login can 
 save_settings($db, ['silent_login_enabled' => '1']);
 assert_equals('1', get_settings($db)['silent_login_enabled'], 'silent login can be turned back on');
 
+// The data quota defaults to unlimited so it is opt-in.
+assert_equals('0', get_settings($db)['data_quota_mb'], 'the data quota defaults to unlimited');
+save_settings($db, ['data_quota_mb' => '500']);
+assert_equals('500', get_settings($db)['data_quota_mb'], 'the data quota can be set');
+save_settings($db, ['data_quota_mb' => '0']);
+assert_equals('0', get_settings($db)['data_quota_mb'], 'the data quota can be cleared back to unlimited');
+
 test_summary();

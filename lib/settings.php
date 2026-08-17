@@ -23,6 +23,10 @@ const SETTINGS_DEFAULTS = [
     // this relies on is supplied by the client, so being able to turn it off
     // mid-event without a redeploy matters.
     'silent_login_enabled' => '1',
+    // Megabytes a code may transfer before the router cuts it off. '0' means
+    // unlimited — the safe default, so the feature is opt-in rather than
+    // silently capping an event that never asked for it.
+    'data_quota_mb' => '0',
 ];
 
 /**

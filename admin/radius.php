@@ -112,6 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'rate_limit' => trim((string) ($_POST['rate_limit'] ?? '')),
             // An unchecked checkbox sends nothing, so absence means off.
             'silent_login_enabled' => isset($_POST['silent_login_enabled']) ? '1' : '0',
+            'data_quota_mb' => (string) max(0, (int) ($_POST['data_quota_mb'] ?? 0)),
         ];
         // Only overwrite the secret when a new one was actually typed, so saving
         // the form does not wipe it.
@@ -180,6 +181,12 @@ admin_layout_start('radius.php', 'Wi-Fi & RADIUS', $settings);
       <input type="text" id="rate_limit" name="rate_limit"
              value="<?= htmlspecialchars($settings['rate_limit']) ?>" placeholder="e.g. 5M/5M">
       <p class="field-hint">Upload/download limit per device, applied at login. Leave blank for uncapped.</p>
+    </div>
+    <div class="field">
+      <label for="data_quota_mb">Data limit per code (MB)</label>
+      <input type="text" id="data_quota_mb" name="data_quota_mb" inputmode="numeric"
+             value="<?= htmlspecialchars($settings['data_quota_mb']) ?>">
+      <p class="field-hint">How much a single code may download and upload in total before it is cut off. <code>0</code> means unlimited. The router enforces this, so a device is disconnected the moment it hits the limit — it does not wait for the next login. Usage is shown per code in Raffle Entries.</p>
     </div>
     <div class="field">
       <label for="silent_login_enabled" class="checkbox-label">
