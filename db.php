@@ -41,8 +41,14 @@ function get_db(): mysqli {
  */
 function reset_db(): void {
     $db = db_holder();
-    if ($db instanceof mysqli) {
-        @$db->close();
+    try {
+        if ($db instanceof mysqli) {
+            @$db->close();
+        }
+    } catch (Throwable $e) {
+        // A half-dead link can throw on close. Dropping the handle is the whole
+        // point, so swallow it and clear regardless.
+    } finally {
+        db_holder(null, true);
     }
-    db_holder(null, true);
 }

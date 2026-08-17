@@ -28,14 +28,67 @@ require_once __DIR__ . '/lib/credentials.php';
 require_once __DIR__ . '/lib/radius_protocol.php';
 
 const LOG_DIR = __DIR__ . '/logs';
+// Rotate at 8MB. The daemon can be flooded by any device on the event SSID,
+// and a full disk would take MySQL and the portal down with it.
+const LOG_MAX_BYTES = 8388608;
 
 function radius_log(string $message): void
 {
     $line = '[' . date('Y-m-d H:i:s') . '] ' . $message . "\n";
     echo $line;
-    if (is_dir(LOG_DIR)) {
-        file_put_contents(LOG_DIR . '/radius.log', $line, FILE_APPEND | LOCK_EX);
+    if (!is_dir(LOG_DIR)) {
+        return;
     }
+    $path = LOG_DIR . '/radius.log';
+
+    // Only stat periodically — this runs on every logged packet.
+    static $writes = 0;
+    if ((++$writes % 100) === 0) {
+        clearstatcache(true, $path);
+        if (is_file($path) && filesize($path) > LOG_MAX_BYTES) {
+            // Single generation is enough: this is a live-tail diagnostic log,
+            // not an audit trail.
+            @rename($path, LOG_DIR . '/radius.log.1');
+        }
+    }
+
+    file_put_contents($path, $line, FILE_APPEND | LOCK_EX);
+}
+
+/**
+ * Log ignored packets without letting a flood fill the disk: one line per
+ * source IP, then a single summary per minute.
+ */
+function radius_log_drop(string $from, string $expected): void
+{
+    static $seen = [];
+
+    $now = time();
+    // Bound the table: a spoofed-source flood must not grow it without limit.
+    if (count($seen) > 256) {
+        $seen = [];
+    }
+    if (!isset($seen[$from])) {
+        $seen[$from] = ['since' => $now, 'count' => 0];
+        radius_log("Ignored packet from {$from} (trusted router is " . ($expected !== '' ? $expected : 'not set') . ')');
+        return;
+    }
+    $seen[$from]['count']++;
+    if ($now - $seen[$from]['since'] >= 60) {
+        radius_log("Ignored {$seen[$from]['count']} further packets from {$from} in the last minute");
+        $seen[$from] = ['since' => $now, 'count' => 0];
+    }
+}
+
+/**
+ * Make a wire-supplied value safe to write into a line-oriented log: strip
+ * anything non-printable (a newline would let a crafted username forge whole
+ * log entries) and cap the length.
+ */
+function radius_log_safe(string $value, int $max = 64): string
+{
+    $clean = preg_replace('/[^\x20-\x7E]/', '.', substr($value, 0, $max));
+    return $clean === '' ? '(empty)' : $clean;
 }
 
 /**
@@ -71,6 +124,11 @@ $allowedNasIp = (string) $settings['radius_nas_ip'];
 
 if ($secret === '') {
     fwrite(STDERR, "[RADIUS] radius_secret is not set. Configure it in Admin -> RADIUS, then start the daemon.\n");
+    exit(1);
+}
+
+if ($bindPort < 1 || $bindPort > 65535) {
+    fwrite(STDERR, "[RADIUS] radius_auth_port is not a valid port ({$bindPort}). Set it in Admin -> Wi-Fi & RADIUS.\n");
     exit(1);
 }
 
@@ -116,7 +174,11 @@ while (true) {
             radius_log('Restart requested from the admin UI — exiting for the supervisor to respawn.');
             exit(0);
         }
-        radius_log('Restart flag present but could not be deleted (permissions?) — ignoring.');
+        static $flagWarned = false;
+        if (!$flagWarned) {
+            $flagWarned = true;
+            radius_log('Restart flag present but could not be deleted (permissions?) — ignoring.');
+        }
     }
 
     // Re-read the trusted router IP and secret every 10s so admin changes take
@@ -133,6 +195,11 @@ while (true) {
                 $allowedNasIp = (string) $fresh['radius_nas_ip'];
             }
             $settings = $fresh;
+            // Re-state this every reload: an unrestricted daemon is a standing
+            // risk and a startup-only line scrolls away within minutes.
+            if ($allowedNasIp === '') {
+                radius_log('WARNING: radius_nas_ip is not set — accepting RADIUS packets from ANY source. Set the router IP in Admin -> Wi-Fi & RADIUS.');
+            }
         } catch (Throwable $e) {
             radius_log('Could not reload settings: ' . $e->getMessage());
         }
@@ -150,110 +217,117 @@ while (true) {
     // from 127.0.0.1, not from the router.
     $isLocal = ($from === '127.0.0.1' || $from === '::1');
     if ($allowedNasIp !== '' && !$isLocal && $from !== $allowedNasIp) {
-        radius_log("Ignored packet from {$from} (trusted router is {$allowedNasIp})");
+        radius_log_drop($from, $allowedNasIp);
         continue;
     }
-
-    $code = ord($buf[0]);
-    $identifier = ord($buf[1]);
-    $declaredLength = unpack('n', substr($buf, 2, 2))[1];
-    if ($declaredLength < 20 || $declaredLength > $received) {
-        radius_log("Malformed packet from {$from} (declared length {$declaredLength}, got {$received})");
-        continue;
-    }
-    $requestAuth = substr($buf, 4, 16);
-    $attrs = radius_parse_attributes(substr($buf, 20, $declaredLength - 20));
-
-    if ($code === R_ACCOUNTING_REQUEST) {
-        // Stage 1 acknowledges accounting so the router does not retry; Stage 3
-        // will parse the octet counters here for bandwidth quotas.
-        $reply = radius_build_reply(R_ACCOUNTING_RESPONSE, $identifier, $requestAuth, $secret, '');
-        socket_sendto($sock, $reply, strlen($reply), 0, $from, $fromPort);
-        continue;
-    }
-
-    if ($code !== R_ACCESS_REQUEST) {
-        continue;
-    }
-
-    $username = $attrs[R_ATTR_USER_NAME] ?? '';
-    $mac = $attrs[R_ATTR_CALLING_STATION] ?? '';
-
-    // The admin health-check probes with this reserved username purely to prove
-    // the daemon is listening; answer without touching the database.
-    if ($username === '__healthcheck__') {
-        $reply = radius_build_reply(R_ACCESS_REJECT, $identifier, $requestAuth, $secret,
-            radius_encode_attr(R_ATTR_REPLY_MESSAGE, 'health-check ok'));
-        socket_sendto($sock, $reply, strlen($reply), 0, $from, $fromPort);
-        continue;
-    }
-
-    radius_log("Access-Request user={$username} mac={$mac} from={$from}");
 
     try {
-        $row = db_run(fn(mysqli $d) => find_valid_credential($d, $username));
+        $code = ord($buf[0]);
+        $identifier = ord($buf[1]);
+        $declaredLength = unpack('n', substr($buf, 2, 2))[1];
+        if ($declaredLength < 20 || $declaredLength > $received) {
+            radius_log("Malformed packet from {$from} (declared length {$declaredLength}, got {$received})");
+            continue;
+        }
+        $requestAuth = substr($buf, 4, 16);
+        $attrs = radius_parse_attributes(substr($buf, 20, $declaredLength - 20));
+
+        if ($code === R_ACCOUNTING_REQUEST) {
+            // Stage 1 acknowledges accounting so the router does not retry; Stage 3
+            // will parse the octet counters here for bandwidth quotas.
+            $reply = radius_build_reply(R_ACCOUNTING_RESPONSE, $identifier, $requestAuth, $secret, '');
+            socket_sendto($sock, $reply, strlen($reply), 0, $from, $fromPort);
+            continue;
+        }
+
+        if ($code !== R_ACCESS_REQUEST) {
+            continue;
+        }
+
+        $username = $attrs[R_ATTR_USER_NAME] ?? '';
+        $mac = $attrs[R_ATTR_CALLING_STATION] ?? '';
+
+        // The admin health-check probes with this reserved username purely to prove
+        // the daemon is listening; answer without touching the database. It comes
+        // from 127.0.0.1, so require loopback — otherwise, with no NAS allowlist
+        // set, any device on the SSID could reach this branch.
+        if ($username === '__healthcheck__' && $isLocal) {
+            $reply = radius_build_reply(R_ACCESS_REJECT, $identifier, $requestAuth, $secret,
+                radius_encode_attr(R_ATTR_REPLY_MESSAGE, 'health-check ok'));
+            socket_sendto($sock, $reply, strlen($reply), 0, $from, $fromPort);
+            continue;
+        }
+
+        radius_log('Access-Request user=' . radius_log_safe($username) . ' mac=' . radius_log_safe($mac) . " from={$from}");
+
+        try {
+            $row = db_run(fn(mysqli $d) => find_valid_credential($d, $username));
+        } catch (Throwable $e) {
+            radius_log('DB lookup failed: ' . $e->getMessage());
+            $reply = radius_build_reply(R_ACCESS_REJECT, $identifier, $requestAuth, $secret,
+                radius_encode_attr(R_ATTR_REPLY_MESSAGE, 'Database error'));
+            socket_sendto($sock, $reply, strlen($reply), 0, $from, $fromPort);
+            continue;
+        }
+
+        if ($row === null) {
+            radius_log('REJECT ' . radius_log_safe($username) . ': unknown or expired');
+            $reply = radius_build_reply(R_ACCESS_REJECT, $identifier, $requestAuth, $secret,
+                radius_encode_attr(R_ATTR_REPLY_MESSAGE, 'Invalid or expired code'));
+            socket_sendto($sock, $reply, strlen($reply), 0, $from, $fromPort);
+            continue;
+        }
+
+        // Verify the password with whichever method the router used.
+        if (isset($attrs[R_ATTR_CHAP_PASSWORD])) {
+            $challenge = $attrs[R_ATTR_CHAP_CHALLENGE] ?? $requestAuth;
+            $authOk = radius_check_chap($attrs[R_ATTR_CHAP_PASSWORD], $challenge, (string) $row['password']);
+        } else {
+            $supplied = radius_decrypt_password($attrs[R_ATTR_USER_PASSWORD] ?? '', $requestAuth, $secret);
+            $authOk = hash_equals((string) $row['password'], $supplied);
+        }
+
+        if (!$authOk) {
+            radius_log('REJECT ' . radius_log_safe($username) . ': wrong password');
+            $reply = radius_build_reply(R_ACCESS_REJECT, $identifier, $requestAuth, $secret,
+                radius_encode_attr(R_ATTR_REPLY_MESSAGE, 'Invalid credentials'));
+            socket_sendto($sock, $reply, strlen($reply), 0, $from, $fromPort);
+            continue;
+        }
+
+        // Seconds left on this credential.
+        //
+        // MUST come from the SQL-computed seconds_remaining, never from
+        // strtotime($row['expires_at']) - time(): PHP and MySQL run in different
+        // timezones on this deployment (measured at 1h, later 2h with DST), so
+        // PHP-side date arithmetic on a MySQL timestamp inflates every session by
+        // the offset — a 60-minute code silently granting 120 minutes.
+        // Floored at 60 so a code seconds from expiry never hands the router a
+        // zero or negative timeout.
+        $remaining = max(60, (int) $row['seconds_remaining']);
+
+        $replyAttrs = radius_encode_attr(R_ATTR_SESSION_TIMEOUT, pack('N', $remaining))
+                    . radius_encode_vsa(VENDOR_MIKROTIK, MT_UPTIME_LIMIT, pack('N', $remaining));
+
+        $rate = (string) ($row['rate_limit'] ?? '');
+        if ($rate === '') {
+            $rate = (string) $settings['rate_limit'];
+        }
+        if ($rate !== '') {
+            $replyAttrs .= radius_encode_vsa(VENDOR_MIKROTIK, MT_RATE_LIMIT, $rate);
+        }
+
+        $reply = radius_build_reply(R_ACCESS_ACCEPT, $identifier, $requestAuth, $secret, $replyAttrs);
+        socket_sendto($sock, $reply, strlen($reply), 0, $from, $fromPort);
+        radius_log('ACCEPT ' . radius_log_safe($username) . ": {$remaining}s remaining" . ($rate !== '' ? ", rate {$rate}" : ''));
+
+        try {
+            db_run(fn(mysqli $d) => touch_credential($d, $username));
+        } catch (Throwable $e) {
+            radius_log('Could not update last_used_at: ' . $e->getMessage()); // non-fatal
+        }
     } catch (Throwable $e) {
-        radius_log('DB lookup failed: ' . $e->getMessage());
-        $reply = radius_build_reply(R_ACCESS_REJECT, $identifier, $requestAuth, $secret,
-            radius_encode_attr(R_ATTR_REPLY_MESSAGE, 'Database error'));
-        socket_sendto($sock, $reply, strlen($reply), 0, $from, $fromPort);
+        radius_log('Unhandled error processing packet from ' . $from . ': ' . $e->getMessage());
         continue;
-    }
-
-    if ($row === null) {
-        radius_log("REJECT {$username}: unknown or expired");
-        $reply = radius_build_reply(R_ACCESS_REJECT, $identifier, $requestAuth, $secret,
-            radius_encode_attr(R_ATTR_REPLY_MESSAGE, 'Invalid or expired code'));
-        socket_sendto($sock, $reply, strlen($reply), 0, $from, $fromPort);
-        continue;
-    }
-
-    // Verify the password with whichever method the router used.
-    if (isset($attrs[R_ATTR_CHAP_PASSWORD])) {
-        $challenge = $attrs[R_ATTR_CHAP_CHALLENGE] ?? $requestAuth;
-        $authOk = radius_check_chap($attrs[R_ATTR_CHAP_PASSWORD], $challenge, (string) $row['password']);
-    } else {
-        $supplied = radius_decrypt_password($attrs[R_ATTR_USER_PASSWORD] ?? '', $requestAuth, $secret);
-        $authOk = hash_equals((string) $row['password'], $supplied);
-    }
-
-    if (!$authOk) {
-        radius_log("REJECT {$username}: wrong password");
-        $reply = radius_build_reply(R_ACCESS_REJECT, $identifier, $requestAuth, $secret,
-            radius_encode_attr(R_ATTR_REPLY_MESSAGE, 'Invalid credentials'));
-        socket_sendto($sock, $reply, strlen($reply), 0, $from, $fromPort);
-        continue;
-    }
-
-    // Seconds left on this credential.
-    //
-    // MUST come from the SQL-computed seconds_remaining, never from
-    // strtotime($row['expires_at']) - time(): PHP and MySQL run in different
-    // timezones on this deployment (measured at 1h, later 2h with DST), so
-    // PHP-side date arithmetic on a MySQL timestamp inflates every session by
-    // the offset — a 60-minute code silently granting 120 minutes.
-    // Floored at 60 so a code seconds from expiry never hands the router a
-    // zero or negative timeout.
-    $remaining = max(60, (int) $row['seconds_remaining']);
-
-    $replyAttrs = radius_encode_attr(R_ATTR_SESSION_TIMEOUT, pack('N', $remaining))
-                . radius_encode_vsa(VENDOR_MIKROTIK, MT_UPTIME_LIMIT, pack('N', $remaining));
-
-    $rate = (string) ($row['rate_limit'] ?? '');
-    if ($rate === '') {
-        $rate = (string) $settings['rate_limit'];
-    }
-    if ($rate !== '') {
-        $replyAttrs .= radius_encode_vsa(VENDOR_MIKROTIK, MT_RATE_LIMIT, $rate);
-    }
-
-    $reply = radius_build_reply(R_ACCESS_ACCEPT, $identifier, $requestAuth, $secret, $replyAttrs);
-    socket_sendto($sock, $reply, strlen($reply), 0, $from, $fromPort);
-    radius_log("ACCEPT {$username}: {$remaining}s remaining" . ($rate !== '' ? ", rate {$rate}" : ''));
-
-    try {
-        db_run(fn(mysqli $d) => touch_credential($d, $username));
-    } catch (Throwable $e) {
-        radius_log('Could not update last_used_at: ' . $e->getMessage()); // non-fatal
     }
 }
