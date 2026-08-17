@@ -38,6 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'revok
 $result = $db->query(
     'SELECT e.name, e.phone, e.email, e.code, e.created_at,
             c.expires_at,
+            c.mac,
             TIMESTAMPDIFF(SECOND, NOW(), c.expires_at) AS seconds_remaining
        FROM entries e
        LEFT JOIN wifi_credentials c ON c.username = e.code
@@ -131,6 +132,9 @@ admin_layout_start('entries.php', 'Raffle Entries', $settings);
                 <span class="pill">Expired</span>
               <?php else: ?>
                 <span class="pill">None</span>
+              <?php endif; ?>
+              <?php if (!empty($row['mac'])): ?>
+                <span class="pill-note" title="Device bound for silent reconnect"><?= htmlspecialchars($row['mac'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></span>
               <?php endif; ?>
             </td>
             <td>

@@ -203,6 +203,32 @@ Then point the hotspot login page at the portal so Mikrotik's redirect
    (see the profile-name check above) and one leaked code will work on
    unlimited devices for the whole event.
 
+## Silent reconnect
+
+When a device returns to the portal still holding a valid code, it is connected
+straight through instead of being asked for its details again — the common case
+being a phone that slept or walked out of range. Turn it off with **Reconnect
+known devices without the form** on the Wi-Fi & RADIUS page.
+
+Two limits are deliberate:
+
+- **An expired code always gets the form.** The device MAC arrives in the URL
+  and cannot be verified from the portal, so silent reconnect only ever reuses a
+  credential that is already valid. It never issues or renews one.
+- **The code is not displayed on the reconnect screen, but it is not secret from
+  whoever made the request.** The credential has to travel through the browser to
+  reach the router, so it sits in that page's hidden fields. Someone who already
+  knows a device's MAC can therefore learn that attendee's code. It buys Wi-Fi
+  that is free anyway and does not let them claim the prize — the draw is run
+  from the admin's name/phone/email list — but it does let them consume that
+  attendee's single allowed session.
+
+Attendees who lent their phone to someone can use **Not you? Sign in with your
+own details** to reach the form.
+
+The bound device is shown next to each code in Raffle Entries, so staff can see
+which entries will reconnect silently.
+
 ## Troubleshooting
 
 Everything is visible from the browser — **Admin → RADIUS Log** shows the live
@@ -216,3 +242,4 @@ daemon log, and **Wi-Fi & RADIUS** diagnoses connectivity.
 | `REJECT: wrong password` | Router and portal shared secrets differ. |
 | Daemon alive, nothing answers | Another process holds UDP 1812 — `ss -lunp \| grep 1812` |
 | Admin → RADIUS Log shows nothing | The daemon has not started, or `logs/` is not writable by the web server user — check `bash start_radius.sh status` and the directory ownership set in the permissions step. |
+| A device is not reconnecting silently | Its code expired (expected — it gets the form), silent reconnect is switched off, or the router is not sending `mac` on its redirect. Check the Wi-Fi column in Raffle Entries: no device shown means no MAC was ever recorded. |
