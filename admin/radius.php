@@ -110,6 +110,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'radius_nas_ip' => trim((string) ($_POST['radius_nas_ip'] ?? '')),
             'session_minutes' => (string) max(1, (int) ($_POST['session_minutes'] ?? 720)),
             'rate_limit' => trim((string) ($_POST['rate_limit'] ?? '')),
+            // An unchecked checkbox sends nothing, so absence means off.
+            'silent_login_enabled' => isset($_POST['silent_login_enabled']) ? '1' : '0',
         ];
         // Only overwrite the secret when a new one was actually typed, so saving
         // the form does not wipe it.
@@ -178,6 +180,14 @@ admin_layout_start('radius.php', 'Wi-Fi & RADIUS', $settings);
       <input type="text" id="rate_limit" name="rate_limit"
              value="<?= htmlspecialchars($settings['rate_limit']) ?>" placeholder="e.g. 5M/5M">
       <p class="field-hint">Upload/download limit per device, applied at login. Leave blank for uncapped.</p>
+    </div>
+    <div class="field">
+      <label for="silent_login_enabled" class="checkbox-label">
+        <input type="checkbox" id="silent_login_enabled" name="silent_login_enabled" value="1"
+               <?= $settings['silent_login_enabled'] === '1' ? 'checked' : '' ?>>
+        Reconnect known devices without the form
+      </label>
+      <p class="field-hint">When a device comes back to the portal still holding a valid code, connect it straight through instead of asking for its details again. Expired codes always get the form. Turn this off if device detection misbehaves.</p>
     </div>
     <button type="submit">Save RADIUS settings</button>
   </form>

@@ -18,6 +18,11 @@ const SETTINGS_DEFAULTS = [
     'session_minutes' => '720',
     // Mikrotik rate-limit string (upload/download). Empty means uncapped.
     'rate_limit' => '',
+    // '1' = a device holding a still-valid credential is reconnected without
+    // seeing the form. '0' = always show the form. Staff kill switch: the MAC
+    // this relies on is supplied by the client, so being able to turn it off
+    // mid-event without a redeploy matters.
+    'silent_login_enabled' => '1',
 ];
 
 /**
