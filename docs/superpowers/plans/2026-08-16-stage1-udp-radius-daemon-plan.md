@@ -1253,7 +1253,10 @@ assert_true($row !== null, 'radius_add_user issues a usable credential');
 assert_equals('04829371', $row['password'], 'the code is also the password');
 assert_equals('5M/5M', $row['rate_limit'], 'the configured rate limit is applied');
 
-$expiresIn = strtotime($row['expires_at']) - time();
+// Use MySQL's own seconds_remaining, never strtotime($row['expires_at']) - time():
+// PHP and MySQL run in different timezones here, so PHP-side date arithmetic on a
+// MySQL timestamp inflates the result by the offset.
+$expiresIn = (int) $row['seconds_remaining'];
 assert_true($expiresIn > 5000 && $expiresIn <= 5400, 'the credential expires after session_minutes (90m = 5400s)');
 
 assert_true(radius_user_exists($db, '04829371'), 'radius_user_exists finds the issued code');
