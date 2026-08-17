@@ -29,8 +29,17 @@ issue_credential($db, '55556666', -5); // already expired
 // Start the daemon against the test database.
 $root = dirname(__DIR__);
 $daemonLog = $root . '/logs/test-daemon.log';
-@unlink($daemonLog); // a stale log would fool the readiness wait below
+@unlink($daemonLog); // keeps startup failures (STDERR) from a previous run out of the way
 $descriptors = [1 => ['file', $daemonLog, 'a'], 2 => ['file', $daemonLog, 'a']];
+
+// The daemon only mirrors log lines to stdout on an interactive terminal, so
+// under proc_open its stdout redirect stays empty. logs/radius.log is the
+// authoritative sink, and that is what the readiness wait below reads. It is a
+// long-lived append-only file, so remember where it ends now and only look at
+// what this run appends — otherwise a "Listening on UDP" line from an earlier
+// run would report readiness instantly.
+$radiusLog = $root . '/logs/radius.log';
+$radiusLogOffset = is_file($radiusLog) ? (int) filesize($radiusLog) : 0;
 // env = null means "inherit this process's environment". The test itself is
 // launched with DB_NAME=wifi_portal_test, so the daemon picks up the test
 // database automatically. Passing an explicit env array would replace the whole
@@ -57,7 +66,11 @@ assert_true(is_resource($proc), 'the daemon process started');
 $deadline = microtime(true) + 20;
 $listening = false;
 while (microtime(true) < $deadline) {
-    if (is_file($daemonLog) && str_contains((string) @file_get_contents($daemonLog), 'Listening on UDP')) {
+    clearstatcache(true, $radiusLog);
+    $fresh = is_file($radiusLog)
+        ? (string) @file_get_contents($radiusLog, false, null, $radiusLogOffset)
+        : '';
+    if (str_contains($fresh, 'Listening on UDP')) {
         $listening = true;
         break;
     }

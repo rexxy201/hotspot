@@ -32,10 +32,32 @@ const LOG_DIR = __DIR__ . '/logs';
 // and a full disk would take MySQL and the portal down with it.
 const LOG_MAX_BYTES = 8388608;
 
+/**
+ * Whether stdout looks like a terminal a person is reading.
+ *
+ * posix_isatty() is absent on Windows and on PHP builds without ext-posix, so
+ * fall back to assuming non-interactive: under a supervisor that is both the
+ * common case and the safe one (it suppresses the duplicate write).
+ */
+function radius_stdout_is_interactive(): bool
+{
+    static $interactive = null;
+    if ($interactive === null) {
+        $interactive = function_exists('posix_isatty') && @posix_isatty(STDOUT);
+    }
+    return $interactive;
+}
+
 function radius_log(string $message): void
 {
     $line = '[' . date('Y-m-d H:i:s') . '] ' . $message . "\n";
-    echo $line;
+    // Only mirror to stdout for an interactive run. Under a supervisor, stdout
+    // is redirected into logs/radius.log — the same file written below — which
+    // would double every line AND defeat rotation, because the supervisor keeps
+    // appending to the renamed inode after a rollover.
+    if (radius_stdout_is_interactive()) {
+        echo $line;
+    }
     if (!is_dir(LOG_DIR)) {
         return;
     }
@@ -64,9 +86,12 @@ function radius_log_drop(string $from, string $expected): void
     static $seen = [];
 
     $now = time();
-    // Bound the table: a spoofed-source flood must not grow it without limit.
-    if (count($seen) > 256) {
-        $seen = [];
+    // Table full: stay silent about new sources rather than clearing the table.
+    // Clearing would return every tracked source to the "first seen" branch and
+    // resume full-rate logging — the opposite of what this function is for.
+    // A flood from many (or spoofed) sources is exactly when the cap matters.
+    if (!isset($seen[$from]) && count($seen) >= 256) {
+        return;
     }
     if (!isset($seen[$from])) {
         $seen[$from] = ['since' => $now, 'count' => 0];
