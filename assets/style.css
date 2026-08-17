@@ -99,6 +99,67 @@ body {
 }
 
 /* --------------------------------------------------------------------------
+   Ambient background — brand-color glow + film grain
+
+   Fixed behind everything (z-index -1), so it only shows through the empty
+   space around the card/banner/button — every foreground surface already
+   paints its own opaque background. The grain canvas itself is drawn and
+   animated from a small inline script at the bottom of index.php; see the
+   comments there for why it's deliberately cheap.
+   -------------------------------------------------------------------------- */
+
+.portal-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.portal-bg::before,
+.portal-bg::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+}
+
+.portal-bg::before {
+  width: 62vmax;
+  height: 62vmax;
+  top: -24vmax;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-accent);
+  opacity: .16;
+}
+
+.portal-bg::after {
+  width: 52vmax;
+  height: 52vmax;
+  bottom: -24vmax;
+  right: -14vmax;
+  background: var(--brand-color);
+  opacity: .14;
+}
+
+.grain {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  opacity: .5;
+  mix-blend-mode: overlay;
+}
+
+@media (prefers-color-scheme: dark) {
+  .portal-bg::before { opacity: .26; }
+  .portal-bg::after { opacity: .2; }
+  .grain { opacity: .35; mix-blend-mode: soft-light; }
+}
+
+/* --------------------------------------------------------------------------
    Attendee portal card
    -------------------------------------------------------------------------- */
 
@@ -173,6 +234,131 @@ body {
   line-height: 1.4;
   color: var(--color-text-muted);
 }
+
+/* --------------------------------------------------------------------------
+   Hero banner — EYIF 2.0 masthead image + "Connect to Win" entry point
+
+   The masthead (EYIF logo, partner/sponsor logos, "Ideas, Capital & Impact",
+   "EYIF 2.0") is one designed image rather than markup, so this is just its
+   frame. The sign-up form no longer sits on the page by default; it opens
+   in a modal (see "Sign-up modal" below) so the banner + button are the
+   first and only thing attendees see.
+   -------------------------------------------------------------------------- */
+
+.hero-banner {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: var(--space-2) 0 0;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+/* Grows to fill the space below the banner, so the button centres in the
+   middle of the screen rather than sitting right under the image. */
+.hero-cta {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5) 0;
+}
+
+.btn-connect-win {
+  position: relative;
+  max-width: 320px;
+  margin: 0 auto;
+  background: linear-gradient(135deg, var(--color-accent), #ffb457 130%);
+  font-size: 19px;
+  box-shadow: 0 10px 28px -6px rgba(248, 104, 0, .5);
+  animation: connect-win-pulse 2.6s ease-in-out infinite;
+}
+
+.btn-connect-win:hover { filter: brightness(1.06); }
+
+@keyframes connect-win-pulse {
+  0%, 100% { box-shadow: 0 10px 28px -6px rgba(248, 104, 0, .5); }
+  50% { box-shadow: 0 10px 36px -4px rgba(248, 104, 0, .75); }
+}
+
+/* "Magnetize" particles — small dots scattered around the button that snap
+   inward on hover/touch and spring back out on release. Vanilla version of
+   the particle-attraction pattern: plain dots positioned/animated with CSS
+   custom properties + a transition, no framer-motion. Generated and toggled
+   by the script at the bottom of index.php. */
+.magnet-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: .5;
+  pointer-events: none;
+  transform: translate(var(--px, 0), var(--py, 0));
+  transition: transform .5s cubic-bezier(.34, 1.56, .64, 1), opacity .35s ease;
+}
+
+.btn-connect-win.is-attracting .magnet-particle {
+  transform: translate(0, 0);
+  opacity: 1;
+}
+
+/* --------------------------------------------------------------------------
+   Sign-up modal — the details form, opened by "Connect to Win"
+
+   No external dialog/animation library: this is a captive portal, rendered
+   before the attendee has internet access, so it has to work with plain
+   CSS + inline JS only (see the script at the bottom of index.php).
+   -------------------------------------------------------------------------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgba(10, 18, 26, .55);
+  z-index: 100;
+}
+
+.modal-overlay[hidden] { display: none; }
+
+.modal-card {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  max-height: 92dvh;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border-top: 5px solid var(--color-accent);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-6) var(--space-4) var(--space-5);
+  text-align: center;
+}
+
+.modal-close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 36px;
+  height: 36px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+}
+
+.modal-close:hover { filter: none; background: var(--color-border); }
 
 /* --------------------------------------------------------------------------
    Forms
@@ -593,6 +779,18 @@ td.code-cell {
   color: var(--color-text-muted);
 }
 
+/* Preview of the current upload, shown above its file input so staff can
+   see what's live before deciding whether to replace it. */
+.settings-preview {
+  display: block;
+  max-width: 100%;
+  width: 320px;
+  height: auto;
+  margin-bottom: var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--admin-border);
+}
+
 /* Sidebar collapses to a horizontal strip on narrow screens so staff can
    still use the admin from a phone at the venue. */
 @media (max-width: 720px) {
@@ -623,6 +821,7 @@ td.code-cell {
   .details { margin-bottom: var(--space-3); }
   .powered-by { margin-top: var(--space-3); }
   .powered-by img { height: 26px; }
+  .hero-banner { margin-bottom: var(--space-3); }
 }
 
 @media (min-width: 640px) {

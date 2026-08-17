@@ -17,15 +17,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'event_dates' => trim($_POST['event_dates'] ?? ''),
         'event_venue' => trim($_POST['event_venue'] ?? ''),
         'brand_color' => trim($_POST['brand_color'] ?? ''),
+        'cta_button_text' => trim($_POST['cta_button_text'] ?? '') ?: SETTINGS_DEFAULTS['cta_button_text'],
     ];
 
     [$eventLogoOk, $eventLogoError, $eventLogoExt] = validate_logo_upload($_FILES['event_logo'] ?? ['error' => UPLOAD_ERR_NO_FILE]);
     [$poweredByOk, $poweredByError, $poweredByExt] = validate_logo_upload($_FILES['powered_by_logo'] ?? ['error' => UPLOAD_ERR_NO_FILE]);
+    [$heroBannerOk, $heroBannerError, $heroBannerExt] = validate_logo_upload($_FILES['hero_banner'] ?? ['error' => UPLOAD_ERR_NO_FILE]);
 
     if (!$eventLogoOk) {
         $error = $eventLogoError;
     } elseif (!$poweredByOk) {
         $error = $poweredByError;
+    } elseif (!$heroBannerOk) {
+        $error = $heroBannerError;
     } else {
         $uploadsDir = __DIR__ . '/../uploads/logos';
         $uploadFailed = false;
@@ -45,9 +49,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $newSettings['powered_by_logo_path'] = $poweredByLogoPath;
             }
         }
+        if (!$uploadFailed && $heroBannerExt) {
+            $heroBannerPath = store_logo_upload($_FILES['hero_banner'], $heroBannerExt, $uploadsDir);
+            if ($heroBannerPath === null) {
+                $uploadFailed = true;
+            } else {
+                $newSettings['hero_banner_path'] = $heroBannerPath;
+            }
+        }
 
         if ($uploadFailed) {
-            $error = 'Failed to save the uploaded logo. Please try again.';
+            $error = 'Failed to save the uploaded image. Please try again.';
         } else {
             save_settings($db, $newSettings);
             $settings = get_settings($db);
@@ -97,6 +109,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <input type="file" id="powered_by_logo" name="powered_by_logo" accept="image/png,image/jpeg">
         <p class="field-hint">PNG or JPG, max 2MB. Shown small, at the foot of the portal.</p>
       </div>
+
+      <div class="field">
+        <label for="hero_banner">Portal Banner</label>
+        <?php if ($settings['hero_banner_path']): ?>
+          <img class="settings-preview" src="../<?= htmlspecialchars($settings['hero_banner_path']) ?>" alt="Current portal banner">
+        <?php endif; ?>
+        <input type="file" id="hero_banner" name="hero_banner" accept="image/png,image/jpeg">
+        <p class="field-hint">PNG or JPG, max 2MB. The full-width image at the top of the sign-up page. Keep it under roughly 1400px wide — it never displays larger than that. Leave empty to keep the current banner.</p>
+      </div>
+      <div class="field">
+        <label for="cta_button_text">Connect Button Text</label>
+        <input type="text" id="cta_button_text" name="cta_button_text" value="<?= htmlspecialchars($settings['cta_button_text']) ?>">
+        <p class="field-hint">The big button attendees tap to open the sign-up form.</p>
+      </div>
+
       <button type="submit">Save changes</button>
     </form>
   </section>

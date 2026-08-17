@@ -70,9 +70,13 @@ if (!$forget && $settings['silent_login_enabled'] === '1' && $mikrotikParams['ma
 <style>:root { --brand-color: <?= htmlspecialchars($settings['brand_color']) ?>; }</style>
 </head>
 <body>
+<?php // Ambient glow + film-grain, fixed behind everything. Pure canvas/CSS —
+      // no external image or library — so it still renders before the
+      // attendee has internet access. See the grain script at the bottom. ?>
+<div class="portal-bg" aria-hidden="true"><canvas id="grain-canvas" class="grain"></canvas></div>
 <div class="portal">
+  <?php if ($silentLoginUrl !== ''): ?>
   <div class="portal-card">
-    <?php if ($silentLoginUrl !== ''): ?>
       <?php if ($settings['event_logo_path']): ?>
         <img class="logo" src="<?= htmlspecialchars($settings['event_logo_path']) ?>" alt="<?= htmlspecialchars($settings['event_name']) ?> logo">
       <?php endif; ?>
@@ -94,42 +98,165 @@ if (!$forget && $settings['silent_login_enabled'] === '1' && $mikrotikParams['ma
             // cannot complete a login (no link-login-only means no auto-post),
             // and the borrower's submission would not rebind the device. ?>
       <p class="hint"><a href="index.php?<?= htmlspecialchars(http_build_query(['forget' => '1'] + $mikrotikParams), ENT_QUOTES) ?>">Not you? Sign in with your own details</a></p>
-    <?php else: ?>
-    <?php if ($settings['event_logo_path']): ?>
-      <img class="logo" src="<?= htmlspecialchars($settings['event_logo_path']) ?>" alt="<?= htmlspecialchars($settings['event_name']) ?> logo">
-    <?php endif; ?>
-    <?php // With a logo present the event name is already visible, so the
-          // heading is hidden visually but kept for screen readers. ?>
-    <h1<?= $settings['event_logo_path'] ? ' class="visually-hidden"' : '' ?>><?= htmlspecialchars($settings['event_name']) ?></h1>
-    <p class="tagline"><?= htmlspecialchars($settings['event_tagline']) ?></p>
-    <p class="details"><?= htmlspecialchars($settings['event_dates']) ?></p>
-
-    <form method="POST" action="connect.php" id="connect-form">
-      <div class="field">
-        <label for="name">Full Name</label>
-        <input type="text" id="name" name="name" autocomplete="name" required>
-      </div>
-      <div class="field">
-        <label for="phone">Phone Number</label>
-        <input type="tel" id="phone" name="phone" autocomplete="tel" inputmode="tel" required>
-      </div>
-      <div class="field">
-        <label for="email">Email Address</label>
-        <input type="email" id="email" name="email" autocomplete="email" inputmode="email" required>
-      </div>
-      <?php foreach ($mikrotikParams as $key => $value): ?>
-        <input type="hidden" name="mikrotik_<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars($value) ?>">
-      <?php endforeach; ?>
-      <button type="submit" id="connect-submit">Connect to Wi-Fi</button>
-    </form>
-    <?php endif; ?>
   </div>
+  <?php else: ?>
+  <?php // Single designed banner (logo + partner/sponsor logos + headline)
+        // — admin-uploadable via Branding Settings, so nothing here is
+        // fixed to one event's artwork. Falls back to the bundled EYIF 2.0
+        // banner (see SETTINGS_DEFAULTS) until an admin replaces it. ?>
+  <?php if ($settings['hero_banner_path']): ?>
+    <img class="hero-banner" src="<?= htmlspecialchars($settings['hero_banner_path']) ?>" alt="<?= htmlspecialchars($settings['event_name']) ?>">
+  <?php endif; ?>
+
+  <?php // Grows to fill the space below the banner so the button lands in
+        // the middle of the screen rather than immediately under it. ?>
+  <div class="hero-cta">
+    <button type="button" id="open-connect-modal" class="btn-connect-win"><?= htmlspecialchars($settings['cta_button_text']) ?></button>
+  </div>
+
+  <?php // The sign-up form lives here, hidden until "Connect to Win" opens it.
+        // Submitting still posts straight to connect.php — the success/
+        // "you're connected" flow after that is unchanged. ?>
+  <div class="modal-overlay" id="connect-modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="connect-modal-title">
+      <button type="button" class="modal-close" id="close-connect-modal" aria-label="Close">&times;</button>
+      <h2 id="connect-modal-title" class="visually-hidden"><?= htmlspecialchars($settings['event_name']) ?></h2>
+      <p class="tagline"><?= htmlspecialchars($settings['event_tagline']) ?></p>
+      <p class="details"><?= htmlspecialchars($settings['event_dates']) ?></p>
+
+      <form method="POST" action="connect.php" id="connect-form">
+        <div class="field">
+          <label for="name">Full Name</label>
+          <input type="text" id="name" name="name" autocomplete="name" required>
+        </div>
+        <div class="field">
+          <label for="phone">Phone Number</label>
+          <input type="tel" id="phone" name="phone" autocomplete="tel" inputmode="tel" required>
+        </div>
+        <div class="field">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" name="email" autocomplete="email" inputmode="email" required>
+        </div>
+        <?php foreach ($mikrotikParams as $key => $value): ?>
+          <input type="hidden" name="mikrotik_<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars($value) ?>">
+        <?php endforeach; ?>
+        <button type="submit" id="connect-submit">Connect to Wi-Fi</button>
+      </form>
+    </div>
+  </div>
+  <?php endif; ?>
 
   <?php if ($settings['powered_by_logo_path']): ?>
     <p class="powered-by">Powered by <img src="<?= htmlspecialchars($settings['powered_by_logo_path']) ?>" alt="MangoNet"></p>
   <?php endif; ?>
 </div>
 <script>
+(function () {
+  // Film-grain background texture. Deliberately cheap: a small canvas
+  // (180x180) stretched over the viewport with pixelated rendering, redrawn
+  // a few times a second rather than every frame, paused while the tab is
+  // hidden, and skipped entirely for prefers-reduced-motion — this renders
+  // on whatever phone an attendee showed up with, before they have Wi-Fi,
+  // so it can't be the thing that makes the portal feel slow.
+  var canvas = document.getElementById('grain-canvas');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d', { alpha: true });
+  if (!ctx) return;
+
+  var SIZE = 180;
+  canvas.width = SIZE;
+  canvas.height = SIZE;
+
+  var draw = function () {
+    var image = ctx.createImageData(SIZE, SIZE);
+    var data = image.data;
+    for (var i = 0; i < data.length; i += 4) {
+      var value = Math.random() * 255;
+      data[i] = value;
+      data[i + 1] = value;
+      data[i + 2] = value;
+      data[i + 3] = 20; // low alpha — a texture, not TV static
+    }
+    ctx.putImageData(image, 0, 0);
+  };
+
+  draw();
+
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    var frame = 0;
+    var raf = 0;
+    var loop = function () {
+      if (frame % 4 === 0) draw();
+      frame++;
+      raf = window.requestAnimationFrame(loop);
+    };
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        window.cancelAnimationFrame(raf);
+      } else {
+        raf = window.requestAnimationFrame(loop);
+      }
+    });
+    raf = window.requestAnimationFrame(loop);
+  }
+})();
+
+(function () {
+  // "Magnetize" particles around the Connect to Win button: a dozen dots
+  // scattered around it that snap in on hover/touch, spring back out on
+  // release. Purely decorative (pointer-events: none), so it can't get in
+  // the way of the actual tap.
+  var btn = document.getElementById('open-connect-modal');
+  if (!btn) return;
+  var COUNT = 12;
+  var RADIUS = 46;
+  for (var i = 0; i < COUNT; i++) {
+    var particle = document.createElement('span');
+    particle.className = 'magnet-particle';
+    var angle = Math.random() * Math.PI * 2;
+    var dist = RADIUS * (0.5 + Math.random() * 0.5);
+    particle.style.setProperty('--px', (Math.cos(angle) * dist).toFixed(1) + 'px');
+    particle.style.setProperty('--py', (Math.sin(angle) * dist).toFixed(1) + 'px');
+    btn.appendChild(particle);
+  }
+  var attract = function () { btn.classList.add('is-attracting'); };
+  var release = function () { btn.classList.remove('is-attracting'); };
+  btn.addEventListener('mouseenter', attract);
+  btn.addEventListener('mouseleave', release);
+  btn.addEventListener('touchstart', attract, { passive: true });
+  btn.addEventListener('touchend', release);
+  btn.addEventListener('touchcancel', release);
+})();
+
+(function () {
+  var openBtn = document.getElementById('open-connect-modal');
+  var modal = document.getElementById('connect-modal');
+  var closeBtn = document.getElementById('close-connect-modal');
+  if (!openBtn || !modal) return;
+
+  var openModal = function () {
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    var firstField = modal.querySelector('input');
+    if (firstField) firstField.focus();
+  };
+  var closeModal = function () {
+    modal.hidden = true;
+    document.body.style.overflow = '';
+    openBtn.focus();
+  };
+
+  openBtn.addEventListener('click', openModal);
+  closeBtn?.addEventListener('click', closeModal);
+  // Clicking the dimmed backdrop (not the card itself) closes it too.
+  modal.addEventListener('click', function (event) {
+    if (event.target === modal) closeModal();
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !modal.hidden) closeModal();
+  });
+})();
+
 // Give immediate feedback on submit: issuing a code involves email + SMS
 // delivery, so the response is not instant and an unchanged button invites
 // double-taps (which the duplicate-entry handling absorbs, but which look
