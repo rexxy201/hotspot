@@ -1362,7 +1362,9 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PHP_BIN="${PHP_BIN:-php}"
 RADIUS_SCRIPT="${SCRIPT_DIR}/radius_server.php"
-LOG_FILE="${SCRIPT_DIR}/logs/radius.log"
+# The daemon writes and rotates logs/radius.log itself. This file captures only
+# startup failures on stderr, so it stays tiny.
+LOG_FILE="${SCRIPT_DIR}/logs/radius-startup.log"
 PID_FILE="${SCRIPT_DIR}/logs/radius.pid"
 
 mkdir -p "${SCRIPT_DIR}/logs"
@@ -1385,8 +1387,10 @@ start() {
     if is_running; then
         echo "RADIUS daemon started (PID $(cat "$PID_FILE"))"
     else
-        echo "RADIUS daemon failed to start. Last log lines:"
+        echo "RADIUS daemon failed to start. Last startup output:"
         tail -n 15 "$LOG_FILE"
+        echo "--- and the daemon log: ---"
+        tail -n 15 "${SCRIPT_DIR}/logs/radius.log" 2>/dev/null
         return 1
     fi
 }
@@ -1448,8 +1452,12 @@ WorkingDirectory=/var/www/wifi-portal
 ExecStart=/usr/bin/php /var/www/wifi-portal/radius_server.php
 Restart=always
 RestartSec=3
-StandardOutput=append:/var/www/wifi-portal/logs/radius.log
-StandardError=append:/var/www/wifi-portal/logs/radius.log
+# The daemon writes and rotates logs/radius.log itself. Do NOT redirect stdout
+# into that same file: it would double every line, and systemd would keep
+# appending to the old inode after a rotation, defeating the size cap. Startup
+# failures go to stderr, which journald captures (journalctl -u mangonet-radius).
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
