@@ -2,6 +2,7 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../lib/settings.php';
+require_once __DIR__ . '/../lib/credentials.php';
 require_once __DIR__ . '/layout.php';
 require_admin_session();
 
@@ -12,11 +13,7 @@ $totalEntries = (int) $db->query('SELECT COUNT(*) AS c FROM entries')->fetch_ass
 $entriesToday = (int) $db->query(
     'SELECT COUNT(*) AS c FROM entries WHERE DATE(created_at) = CURDATE()'
 )->fetch_assoc()['c'];
-// radcheck holds two rows per code (Cleartext-Password + Simultaneous-Use),
-// so count the distinct usernames to get provisioned Wi-Fi logins.
-$radiusUsers = (int) $db->query(
-    'SELECT COUNT(DISTINCT username) AS c FROM radcheck'
-)->fetch_assoc()['c'];
+$activeCredentials = count_active_credentials($db);
 
 $recent = $db->query(
     'SELECT name, email, code, created_at FROM entries ORDER BY created_at DESC LIMIT 8'
@@ -39,8 +36,8 @@ admin_layout_start('index.php', 'Dashboard', $settings);
     <span class="stat-value"><?= number_format($entriesToday) ?></span>
   </div>
   <div class="stat">
-    <span class="stat-label">Wi-Fi logins issued</span>
-    <span class="stat-value"><?= number_format($radiusUsers) ?></span>
+    <span class="stat-label">Active Wi-Fi codes</span>
+    <span class="stat-value"><?= number_format($activeCredentials) ?></span>
   </div>
 </div>
 
