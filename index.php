@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/lib/settings.php';
+require_once __DIR__ . '/lib/credentials.php';
 
 $db = get_db();
 $settings = get_settings($db);
@@ -13,6 +14,41 @@ $mikrotikParams = [
     'link-login-only' => $_GET['link-login-only'] ?? '',
     'link-orig' => $_GET['link-orig'] ?? '',
 ];
+
+// --- Silent login ---------------------------------------------------------
+// If this device already holds a valid credential, connect it straight through
+// instead of asking for details it has already given. This is the phone that
+// dropped off the Wi-Fi and came back, not a new attendee.
+//
+// The MAC arrives in the query string, so it is client-supplied and unverifiable
+// from here (the portal sits behind the router's NAT). Two rules contain that:
+//   1. We only ever REUSE a still-valid credential. A forged MAC cannot create
+//      or renew one, so at worst it rides a session that already exists.
+//   2. The code is never displayed on this path — only posted to the router. A
+//      spoofed MAC therefore yields Wi-Fi that was free anyway, not somebody
+//      else's prize-draw code.
+$silentCode = '';
+$silentLoginUrl = '';
+
+// An explicit "not you?" click always wins — a borrowed or handed-on phone must
+// be able to reach the form.
+$forget = ($_GET['forget'] ?? '') === '1';
+
+if (!$forget && $settings['silent_login_enabled'] === '1' && $mikrotikParams['mac'] !== '') {
+    $known = find_valid_credential_by_mac($db, $mikrotikParams['mac']);
+    if ($known !== null) {
+        // Same validation the success page applies: only auto-post to the
+        // configured gateway, never to a host named in the query string.
+        $candidate = $mikrotikParams['link-login-only'];
+        $isGateway = filter_var($candidate, FILTER_VALIDATE_URL) !== false
+            && in_array(parse_url($candidate, PHP_URL_SCHEME), ['http', 'https'], true)
+            && parse_url($candidate, PHP_URL_HOST) === MIKROTIK_GATEWAY_HOST;
+        if ($isGateway) {
+            $silentCode = (string) $known['username'];
+            $silentLoginUrl = $candidate;
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -26,6 +62,21 @@ $mikrotikParams = [
 <body>
 <div class="portal">
   <div class="portal-card">
+    <?php if ($silentLoginUrl !== ''): ?>
+      <?php if ($settings['event_logo_path']): ?>
+        <img class="logo" src="<?= htmlspecialchars($settings['event_logo_path']) ?>" alt="<?= htmlspecialchars($settings['event_name']) ?> logo">
+      <?php endif; ?>
+      <h1>Welcome back</h1>
+      <p class="intro">Reconnecting you to <?= htmlspecialchars($settings['event_name']) ?> Wi-Fi…</p>
+      <?php // The code is deliberately NOT shown here — see the note above. ?>
+      <form id="silent-login" method="POST" action="<?= htmlspecialchars($silentLoginUrl) ?>">
+        <input type="hidden" name="username" value="<?= htmlspecialchars($silentCode) ?>">
+        <input type="hidden" name="password" value="<?= htmlspecialchars($silentCode) ?>">
+        <button type="submit">Continue</button>
+      </form>
+      <script>document.getElementById('silent-login').submit();</script>
+      <p class="hint"><a href="index.php?forget=1">Not you? Sign in with your own details</a></p>
+    <?php else: ?>
     <?php if ($settings['event_logo_path']): ?>
       <img class="logo" src="<?= htmlspecialchars($settings['event_logo_path']) ?>" alt="<?= htmlspecialchars($settings['event_name']) ?> logo">
     <?php endif; ?>
@@ -53,6 +104,7 @@ $mikrotikParams = [
       <?php endforeach; ?>
       <button type="submit" id="connect-submit">Connect to Wi-Fi</button>
     </form>
+    <?php endif; ?>
   </div>
 
   <?php if ($settings['powered_by_logo_path']): ?>
@@ -64,7 +116,8 @@ $mikrotikParams = [
 // delivery, so the response is not instant and an unchanged button invites
 // double-taps (which the duplicate-entry handling absorbs, but which look
 // broken to the attendee).
-document.getElementById('connect-form').addEventListener('submit', function () {
+// The reconnect path renders no sign-up form, so this element is absent there.
+document.getElementById('connect-form')?.addEventListener('submit', function () {
   var btn = document.getElementById('connect-submit');
   btn.setAttribute('aria-busy', 'true');
   btn.textContent = 'Connecting…';
