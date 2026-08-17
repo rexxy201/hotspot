@@ -1,180 +1,198 @@
-# VPS Deployment Guide — EYIF 2026 Wi-Fi Portal + RADIUS
+# VPS Deployment Guide — EYIF 2026 Wi-Fi Portal
 
-Target: a single Ubuntu 22.04 droplet (DigitalOcean or equivalent), 1GB RAM is enough
-for a one-off event.
+Target: one Ubuntu 22.04 droplet. 1GB RAM is plenty for a single event.
 
-## 1. Provision the VPS
+There is **no FreeRADIUS to install**. The portal ships its own RADIUS daemon
+(`radius_server.php`), which reads the same database as the web app.
 
-- Create an Ubuntu 22.04 droplet. Note its public IP (`<VPS-IP>`).
-- SSH in, apply updates: `apt update && apt upgrade -y`
-- Create a non-root sudo user and disable root SSH login (standard hardening).
+## 1. Provision the server
 
-## 2. Install MySQL and create the app database
+- Create an Ubuntu 22.04 droplet and note its public IP (`<VPS-IP>`).
+- `apt update && apt upgrade -y`
+- Create a non-root sudo user and disable root SSH login.
+
+## 2. Install PHP, MySQL and nginx
 
 ```bash
-apt install -y mysql-server
+apt install -y nginx mysql-server composer \
+  php php-fpm php-mysqli php-curl php-sockets php-fileinfo php-mbstring
+```
+
+`php-sockets` is required — the RADIUS daemon cannot run without it. Confirm:
+
+```bash
+php -m | grep -E 'sockets|fileinfo|mysqli'
+```
+
+All three must be listed.
+
+## 3. Create the database
+
+```bash
 mysql -u root -e "CREATE DATABASE wifi_portal;"
 mysql -u root -e "CREATE USER 'wifi_portal_user'@'localhost' IDENTIFIED BY '<STRONG-PASSWORD>';"
 mysql -u root -e "GRANT ALL PRIVILEGES ON wifi_portal.* TO 'wifi_portal_user'@'localhost';"
 ```
 
-Clone this repo to `/var/www/wifi-portal`, then:
-
-```bash
-mysql -u root wifi_portal < schema.sql
-```
-
-## 3. Install FreeRADIUS with MySQL support
-
-```bash
-apt install -y freeradius freeradius-mysql
-```
-
-FreeRADIUS uses the SAME `wifi_portal` database as the PHP app (not a separate
-`radius` database) — `connect.php` inserts into `radcheck` right alongside
-`entries`, using the app's single DB connection, so both must live in one
-place. `schema.sql` already creates a minimal `radcheck` table; importing
-FreeRADIUS's own bundled schema on top of it is still worthwhile because it
-also creates `radreply`, `radacct`, and `nas`, and its `radcheck` definition
-uses `CREATE TABLE IF NOT EXISTS`, so it will safely no-op on the table that
-already exists rather than conflict with it:
-
-```bash
-mysql -u root -e "CREATE USER 'radius'@'localhost' IDENTIFIED BY '<RADIUS-DB-PASSWORD>';"
-mysql -u root -e "GRANT ALL PRIVILEGES ON wifi_portal.* TO 'radius'@'localhost';"
-mysql -u root wifi_portal < /etc/freeradius/3.0/mods-config/sql/main/mysql/schema.sql
-```
-
-(A dedicated `radius` MySQL user is created here so FreeRADIUS has its own
-credentials, but it's granted against the `wifi_portal` database — the
-database name itself must not be `radius`.)
-
-Edit `/etc/freeradius/3.0/mods-available/sql` with the values in
-`deploy/freeradius/sql.conf.snippet`, then enable the module and the inner-tunnel
-reference:
-
-```bash
-ln -s /etc/freeradius/3.0/mods-available/sql /etc/freeradius/3.0/mods-enabled/sql
-```
-
-In `/etc/freeradius/3.0/sites-available/default` and `sites-available/inner-tunnel`,
-uncomment the `sql` line in both the `authorize` and `accounting` sections.
-
-## 4. Register the Mikrotik as a RADIUS client
-
-Append `deploy/freeradius/clients.conf.snippet` (filled in with the Mikrotik's real
-public IP and a freshly generated long random secret) to
-`/etc/freeradius/3.0/clients.conf`.
-
-Generate a secret:
-
-```bash
-openssl rand -base64 24
-```
-
-Restart FreeRADIUS:
-
-```bash
-systemctl restart freeradius
-systemctl enable freeradius
-```
-
-## 5. Smoke-test FreeRADIUS before touching the Mikrotik
-
-Insert a throwaway test user directly, isolate RADIUS problems from router problems:
-
-```bash
-mysql -u root wifi_portal -e "INSERT INTO radcheck (username, attribute, op, value) VALUES ('12345678', 'Cleartext-Password', ':=', '12345678');"
-radtest 12345678 12345678 localhost 0 <SHARED-SECRET-FROM-CLIENTS.CONF>
-```
-
-Expected: `Received Access-Accept`. Then:
-
-```bash
-radtest wrongcode wrongcode localhost 0 <SHARED-SECRET-FROM-CLIENTS.CONF>
-```
-
-Expected: `Received Access-Reject`. Remove the throwaway row:
-
-```bash
-mysql -u root wifi_portal -e "DELETE FROM radcheck WHERE username = '12345678';"
-```
-
-## 6. Session expiry (end of each event day)
-
-Add a `radreply` row per new user setting `Session-Timeout` to the number of
-seconds remaining until that day's cutoff. Since this depends on wall-clock time at
-signup, `lib/radius.php`'s `radius_add_user()` (in the app repo) computes this value
-at insert time — confirm the event's daily cutoff time with the event team before
-the event and set it in `config.php` if a `SESSION_CUTOFF_HOUR` constant is added, or
-adjust `radius_add_user()` directly if the app repo doesn't yet compute it. (If this
-step wasn't wired into `connect.php` before deployment, sessions simply won't expire
-automatically — cut off Wi-Fi manually at the end of each day instead, which is an
-acceptable fallback for a one-time event.)
-
-## 7. Install PHP and a web server for the portal
-
-```bash
-apt install -y php php-mysqli php-curl nginx composer
-```
-
-Verify the `fileinfo` extension is enabled — `lib/uploads.php`'s
-`mime_content_type()` needs it, and logo uploads will silently fail
-validation without it:
-
-```bash
-php -m | grep fileinfo
-```
-
-In the production `php.ini` / PHP-FPM pool config, set `display_errors = Off`
-and `log_errors = On` so an unhandled exception (even after the try/catch in
-`connect.php`) never leaks a stack trace to attendees' browsers.
-
-Point nginx at the repo's root (`/var/www/wifi-portal`) with PHP-FPM configured
-normally. Copy `config.example.php` to `config.php`, fill in the real DB, SMTP, and
-Twilio credentials, then generate the admin password hash:
+Clone the repo to `/var/www/wifi-portal`, then load the schema:
 
 ```bash
 cd /var/www/wifi-portal
+mysql -u root wifi_portal < schema.sql
 composer install --no-dev
+```
+
+## 4. Configure the app
+
+```bash
+cp config.example.php config.php
+php -r "echo bin2hex(random_bytes(32)) . \"\n\";"   # APP_KEY
 php hash_password.php "<a-long-random-admin-password>"
 ```
 
-Paste the printed hash into `config.php`'s `ADMIN_PASSWORD_HASH`, then delete any
-shell history containing the plaintext password.
+Edit `config.php` and set:
+
+- `DB_*` to the database user created above
+- `APP_KEY` to the 64-character hex string just generated
+- `ADMIN_PASSWORD_HASH` to the printed bcrypt hash
+- `SMTP_*` and `TWILIO_*` to your real provider credentials
+- `MIKROTIK_GATEWAY_HOST` to the hotspot gateway IP (e.g. `10.5.50.1`)
+
+**`APP_KEY` is unrecoverable if lost.** It is the key that encrypts the RADIUS
+shared secret at rest. It lives *only* in `config.php` — it is never stored in
+the database, so a database backup alone will not bring it back. If the file is
+lost, or if the CLI and the web server somehow run with different values, the
+stored secret cannot be decrypted and you must re-enter it in the admin UI.
+Back `config.php` up somewhere safe and keep it out of git (it already is).
+The app will also refuse to encrypt anything while `APP_KEY` is still the
+committed placeholder (`change-me-to-a-64-char-random-hex-string`) or empty —
+saving RADIUS settings throws until you set a real one.
+
+Then clear the shell history that contains the plaintext admin password:
+
+```bash
+history -c
+```
+
+Set permissions so the web server can write uploads and the daemon can write logs:
+
+```bash
+mkdir -p logs uploads/logos
+chown -R www-data:www-data logs uploads
+```
+
+## 5. Point nginx at the app
+
+Serve `/var/www/wifi-portal` with PHP-FPM as usual. Two rules matter:
+
+```nginx
+# Never serve the config or the logs.
+location ~ ^/(config\.php|logs/) { deny all; }
+```
+
+## 6. Configure RADIUS in the admin UI
+
+Open `https://<your-domain>/admin/`, log in, then go to **Wi-Fi & RADIUS**:
+
+- **Shared secret** — generate with `openssl rand -base64 24`. Must match the router.
+  Strip the trailing newline before pasting it: the secret is written into a
+  RouterOS config line, so spaces, tabs, line breaks and other control
+  characters are rejected by the form outright.
+- **Authentication port** — `1812`
+- **Router public IP** — the router's public IP. The daemon ignores packets
+  from anywhere else, so this must be right.
+- **Session length** — minutes a code stays valid. `720` = 12 hours, one event day.
+- **Speed cap** — e.g. `5M/5M`, or blank for uncapped.
+
+Save.
+
+## 7. Start the daemon
+
+```bash
+sudo cp deploy/mangonet-radius.service /etc/systemd/system/
+sudo nano /etc/systemd/system/mangonet-radius.service   # check paths and User
+sudo systemctl daemon-reload
+sudo systemctl enable --now mangonet-radius
+sudo systemctl status mangonet-radius
+```
+
+**Do not repoint the unit's output at `logs/radius.log`.** The daemon opens,
+writes and rotates that file itself at 8MB. A supervisor appending to the same
+path would double every line, and after a rotation it would keep writing to the
+renamed inode — silently defeating the size cap, so a packet flood from any
+device on the event SSID could fill the disk and take MySQL down with it. That
+is why the unit ships with `StandardOutput=journal` (read it with
+`journalctl -u mangonet-radius`) and why `start_radius.sh` writes startup
+failures to a separate `logs/radius-startup.log`. Leave both as they are.
+
+Now click **Test** on the Wi-Fi & RADIUS page (reload it). It should report the
+daemon is up and answering. If not, the message names the exact fault.
+
+Without systemd, use the wrapper instead:
+
+```bash
+bash start_radius.sh start
+```
 
 ## 8. Firewall
 
 ```bash
 ufw allow OpenSSH
 ufw allow 80,443/tcp
-ufw allow from <MIKROTIK-PUBLIC-IP> to any port 1812,1813 proto udp
+ufw allow from <ROUTER-PUBLIC-IP> to any port 1812,1813 proto udp
 ufw enable
 ```
 
-## 9. Mikrotik-side configuration (run on the router itself, e.g. via Winbox/SSH)
+RADIUS is deliberately **not** open to the internet — only to the router.
+
+## 9. Configure the Mikrotik
+
+On the **Wi-Fi & RADIUS** page click **Download router config**. It produces a
+`.rsc` with your secret, server IP, port and portal host already filled in.
+
+Upload it to the router and run:
 
 ```
-/radius add service=hotspot address=<VPS-IP> secret=<SHARED-SECRET> \
-    authentication-port=1812 accounting-port=1813
-/ip hotspot profile set [find] use-radius=yes
-
-# Allow attendees to reach the portal before they're authenticated:
-/ip hotspot walled-garden add dst-host=<your-domain-or-VPS-IP> action=allow
+/import file=eyif-radius.rsc
 ```
 
-In the hotspot server profile's HTML login page settings, point the login page at
-`http://<your-domain>/index.php`, so Mikrotik's redirect (with its `mac`, `ip`,
-`link-login-only`, `link-orig` query parameters) lands on this app instead of
-Mikrotik's built-in login form.
+The generated config includes
+`/ip hotspot user profile set [find name=hsprof1] shared-users=1`. That line is
+what stops one code being used on several devices at once — it replaces the
+`Simultaneous-Use := 1` check the removed FreeRADIUS setup provided, and the
+daemon cannot enforce it itself until RADIUS accounting lands in a later stage.
+If it is not set, one code works on unlimited devices simultaneously.
+
+Then point the hotspot login page at the portal so Mikrotik's redirect
+(carrying `mac`, `ip`, `link-login-only`, `link-orig`) lands on `index.php`.
+
+Check the profile name matches your router first:
+
+```
+/ip hotspot profile print
+```
 
 ## 10. End-to-end check
 
-1. Connect a test device to the event Wi-Fi.
-2. Confirm it's redirected to the portal page (not Mikrotik's default login page).
-3. Submit the form with real test contact info.
+1. Connect a test phone to the event Wi-Fi.
+2. Confirm it lands on the portal, not Mikrotik's default login page.
+3. Submit the form with real contact details.
 4. Confirm the code arrives by email and SMS.
-5. Confirm the device is online immediately after submitting, without seeing
-   Mikrotik's own login screen.
-6. From another device, try to use the same code — confirm it's rejected
-   (`Simultaneous-Use := 1`) while the first device stays connected.
+5. Confirm the device reaches the internet immediately.
+6. Watch **Admin → RADIUS Log** — an `ACCEPT` line should appear with the
+   seconds remaining.
+7. Confirm the speed cap applies (run a speed test if you set one).
+
+## Troubleshooting
+
+Everything is visible from the browser — **Admin → RADIUS Log** shows the live
+daemon log, and **Wi-Fi & RADIUS** diagnoses connectivity.
+
+| Symptom | Cause |
+|---|---|
+| "no logs/radius.pid" | Daemon never started — `systemctl start mangonet-radius` |
+| "Ignored packet from x.x.x.x" | Router IP differs from the trusted IP. The log page offers a one-click "Trust this IP". |
+| `REJECT: unknown or expired` | The code expired (past its session length) or was revoked. |
+| `REJECT: wrong password` | Router and portal shared secrets differ. |
+| Daemon alive, nothing answers | Another process holds UDP 1812 — `ss -lunp \| grep 1812` |
+| Admin → RADIUS Log shows nothing | The daemon has not started, or `logs/` is not writable by the web server user — check `bash start_radius.sh status` and the directory ownership set in the permissions step. |
