@@ -436,6 +436,78 @@ body {
 
 .modal-close:hover { filter: none; background: var(--color-border); }
 
+/* Wider, left-aligned variant for text-heavy modals (router setup
+   instructions) — the base .modal-card is tuned for the short, centered
+   sign-up form and reads badly with paragraphs of prose. */
+.modal-card-wide {
+  max-width: 640px;
+  text-align: left;
+}
+
+.modal-card-wide h2 {
+  margin: 0 0 var(--space-2);
+  padding-right: var(--space-6);
+  font-size: 19px;
+}
+
+.modal-steps {
+  margin: var(--space-4) 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: modal-step;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.modal-steps li {
+  position: relative;
+  padding-left: 40px;
+}
+
+.modal-steps li::before {
+  counter-increment: modal-step;
+  content: counter(modal-step);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-steps li strong { display: block; margin-bottom: 2px; }
+
+.modal-steps li p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--admin-text-muted);
+}
+
+.modal-steps code {
+  font-size: 13px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--admin-surface-2);
+}
+
+/* The router-instructions modal is deliberately not dismissible the normal
+   way (no × button, no backdrop click, no Escape) — see the JS comment
+   where it's opened. This lock row is the only way out. */
+.modal-lock {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--admin-border);
+}
+
 /* --------------------------------------------------------------------------
    Forms
    -------------------------------------------------------------------------- */
@@ -767,14 +839,23 @@ button[aria-busy="true"] {
 .btn-link {
   display: inline-flex;
   align-items: center;
+  /* Overrides the global button{} reset's width:100%/margin-top for the
+     cases (like the router-instructions trigger) where a <button> wears
+     this class instead of an <a> — .btn-link is meant to sit inline next
+     to other buttons, not stretch to fill its row. */
+  width: auto;
+  margin-top: 0;
   min-height: 44px;
   padding: 0 var(--space-4);
   border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 600;
+  font-family: inherit;
   text-decoration: none;
   color: #fff;
   background: var(--brand-color);
+  border: none;
+  cursor: pointer;
   transition: filter var(--transition);
 }
 
