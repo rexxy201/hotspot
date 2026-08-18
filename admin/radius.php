@@ -80,11 +80,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_verify()) {
             // An unchecked checkbox sends nothing, so absence means off.
             'silent_login_enabled' => isset($_POST['silent_login_enabled']) ? '1' : '0',
             'data_quota_mb' => (string) max(0, (int) ($_POST['data_quota_mb'] ?? 0)),
+            'fallback_login_username' => trim((string) ($_POST['fallback_login_username'] ?? '')),
         ];
         // Only overwrite the secret when a new one was actually typed, so saving
         // the form does not wipe it.
         if ($typedSecret !== '') {
             $newSettings['radius_secret'] = $typedSecret;
+        }
+        // Same "blank means keep the current one" rule as the shared secret —
+        // except when the username is being cleared, which is how an admin
+        // turns the fallback off entirely; leaving a stale password encrypted
+        // in the database after that would be pointless.
+        $typedFallbackPass = (string) ($_POST['fallback_login_password'] ?? '');
+        if ($newSettings['fallback_login_username'] === '') {
+            $newSettings['fallback_login_password'] = '';
+        } elseif ($typedFallbackPass !== '') {
+            $newSettings['fallback_login_password'] = $typedFallbackPass;
         }
         save_settings($db, $newSettings);
         $settings = get_settings($db);
@@ -132,6 +143,19 @@ admin_layout_start('radius.php', 'Wi-Fi & RADIUS', $settings);
 
 <?php if ($notice !== ''): ?><p class="warning"><?= htmlspecialchars($notice) ?></p><?php endif; ?>
 <?php if ($error !== ''): ?><p class="error" role="alert"><?= htmlspecialchars($error) ?></p><?php endif; ?>
+
+<?php if (($settings['fallback_login_username'] ?? '') !== ''): ?>
+<section class="panel" style="margin-bottom:var(--space-4)">
+  <div class="panel-header"><h2>Login mode</h2></div>
+  <p class="warning" style="margin-top:0">
+    <strong>Fallback login is ON.</strong> Attendees are being logged in with the router's
+    local Hotspot user <code><?= htmlspecialchars($settings['fallback_login_username']) ?></code>,
+    not their own code — so RADIUS is not in the path at all, and the per-code session
+    length and data limit below are not being enforced. Clear the username in the
+    Fallback login section to go back to normal RADIUS logins.
+  </p>
+</section>
+<?php endif; ?>
 
 <section class="panel" style="margin-bottom:var(--space-4)">
   <div class="panel-header"><h2>Daemon status</h2></div>
@@ -187,6 +211,38 @@ admin_layout_start('radius.php', 'Wi-Fi & RADIUS', $settings);
       </label>
       <p class="field-hint">When a device comes back to the portal still holding a valid code, connect it straight through instead of asking for its details again. Expired codes always get the form. Turn this off if device detection misbehaves.</p>
     </div>
+
+    <h3 style="margin:var(--space-5) 0 var(--space-2);font-size:14px;color:var(--color-accent);">Fallback login (use if RADIUS can't be reached)</h3>
+    <p class="field-hint" style="margin-bottom:var(--space-3)">
+      Everything above depends on <strong>the router</strong> being able to reach this
+      server on UDP <?= htmlspecialchars($settings['radius_auth_port']) ?> — something outside this app's control. If the
+      router reports <em>"RADIUS server is not responding"</em>, attendees get no internet
+      even though this portal is working perfectly.
+      <br><br>
+      This is the escape hatch. Create a normal Hotspot user <strong>on the router itself</strong>
+      (<code>/ip hotspot user add name=eyifguest password=SomePassword profile=default</code>),
+      enter it here, and the portal will log every attendee in with that local credential
+      instead — the router authenticates it against its own database and never contacts
+      RADIUS at all. Sign-ups, codes, the raffle draw, and email/SMS are unaffected.
+      <br><br>
+      <strong>Trade-off:</strong> because everyone shares one router credential, the per-code
+      session length and data limit above stop applying per attendee. Leave blank to keep
+      normal RADIUS behaviour.
+    </p>
+    <div class="field">
+      <label for="fallback_login_username">Router Hotspot username</label>
+      <input type="text" id="fallback_login_username" name="fallback_login_username"
+             value="<?= htmlspecialchars($settings['fallback_login_username']) ?>"
+             placeholder="Leave blank to use RADIUS (normal)" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="fallback_login_password">Router Hotspot password</label>
+      <input type="text" id="fallback_login_password" name="fallback_login_password"
+             placeholder="<?= $settings['fallback_login_password'] !== '' ? 'Saved — type to replace' : 'Password for that router user' ?>"
+             autocomplete="off">
+      <p class="field-hint">Stored encrypted. Leave blank to keep the current one. Clearing the username above also clears this.</p>
+    </div>
+
     <button type="submit">Save RADIUS settings</button>
   </form>
 </section>

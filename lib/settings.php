@@ -33,13 +33,37 @@ const SETTINGS_DEFAULTS = [
     // unlimited — the safe default, so the feature is opt-in rather than
     // silently capping an event that never asked for it.
     'data_quota_mb' => '0',
+    // --- Fallback login (RADIUS-free escape hatch) ---
+    // Normally the portal logs an attendee into the router using their own
+    // 8-digit code, and the router validates that against our RADIUS daemon.
+    // That requires the ROUTER to be able to reach this server on UDP 1812 —
+    // a dependency that is entirely outside this app's control and which has
+    // failed in practice (a carrier blocking outbound UDP, a router pointed
+    // at the wrong address, a rotating uplink). When it fails, the router
+    // reports "RADIUS server is not responding" and NOBODY gets online, even
+    // though the portal itself is working perfectly.
+    //
+    // Setting these to a Hotspot user created LOCALLY on the router (see
+    // Admin -> Wi-Fi & RADIUS) makes the portal log everyone in with that
+    // local credential instead. The router then authenticates against its own
+    // user database and never contacts RADIUS at all, so attendees get online
+    // regardless of router->server connectivity. Registration, code
+    // generation, the raffle draw, and email/SMS are all unaffected — those
+    // live in this app's own database and never depended on RADIUS.
+    //
+    // Trade-off, deliberately: a shared credential means the per-code session
+    // timeout and data quota (which the router enforces via RADIUS reply
+    // attributes) no longer apply per attendee. Blank = off = normal RADIUS
+    // behaviour, so this changes nothing until an admin explicitly opts in.
+    'fallback_login_username' => '',
+    'fallback_login_password' => '',
 ];
 
 /**
  * Settings whose values are encrypted at rest. APP_KEY lives in config.php,
  * never in the database, so a database leak alone does not expose them.
  */
-const SETTINGS_SECRET_KEYS = ['radius_secret'];
+const SETTINGS_SECRET_KEYS = ['radius_secret', 'fallback_login_password'];
 
 function setting_encrypt(string $plain): string
 {
