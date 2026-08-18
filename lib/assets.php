@@ -17,5 +17,13 @@ function asset_url(string $projectRoot, string $relativePath): string
 {
     $absolute = rtrim($projectRoot, '/') . '/' . ltrim($relativePath, '/');
     $version = @filemtime($absolute);
-    return $relativePath . '?v=' . ($version !== false ? $version : '1');
+    // Root-relative (leading "/"), NOT relative-to-current-page. A bare
+    // "assets/style.css" resolves fine from pages living at the site root
+    // (index.php, connect.php, setup.php) but silently 404s from anything
+    // one directory deeper (admin/login.php, admin/layout.php resolve it
+    // to /admin/assets/style.css) — confirmed live: the admin pages were
+    // rendering completely unstyled because of exactly this. A leading
+    // "/" makes the URL resolve to the same place regardless of which
+    // directory the including script lives in.
+    return '/' . ltrim($relativePath, '/') . '?v=' . ($version !== false ? $version : '1');
 }
