@@ -169,7 +169,7 @@ if (!$forget && $mikrotikError === '' && $settings['silent_login_enabled'] === '
     <span class="divider-line"></span>
   </div>
 
-  <p class="hero-shout">CONNECT-ENGAGE-WIN</p>
+  <p class="hero-shout">CONNECT - ENGAGE - WIN</p>
 
   <div class="hero-divider">
     <span class="divider-line"></span>
@@ -178,8 +178,6 @@ if (!$forget && $mikrotikError === '' && $settings['silent_login_enabled'] === '
     </svg>
     <span class="divider-line"></span>
   </div>
-  <p class="hero-shout-sm">Stay connected. Stay inspired. Stay impactful.</p>
-
   <?php // The sign-up form lives here, hidden until "Connect to Win" opens it.
         // Submitting still posts straight to connect.php — the success/
         // "you're connected" flow after that is unchanged. ?>
