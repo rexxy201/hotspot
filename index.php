@@ -140,7 +140,8 @@ if (!$forget && $mikrotikError === '' && $settings['silent_login_enabled'] === '
   <div class="hero-divider">
     <span class="divider-line"></span><span class="divider-dot"></span><span class="divider-line"></span>
   </div>
-      <p class="hero-copy">Connect to the WIFI and stand a chance<br>to win amazing prizes.</p>
+
+  <p class="hero-copy">Connect to the WIFI and stand a chance<br>to win amazing prizes.</p>
 
   <div class="hero-divider">
     <span class="divider-line"></span>
@@ -149,7 +150,6 @@ if (!$forget && $mikrotikError === '' && $settings['silent_login_enabled'] === '
     </svg>
     <span class="divider-line"></span>
   </div>
-
 
   <?php // Button sits in normal document flow now — there's real content
         // both above and below it (the page scrolls), so it no longer
