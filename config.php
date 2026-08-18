@@ -52,6 +52,15 @@ define('TWILIO_FROM_NUMBER', getenv('TWILIO_FROM_NUMBER') ?: '');
 // crafted link pointing at an attacker-controlled host is rejected.
 define('MIKROTIK_GATEWAY_HOST', getenv('MIKROTIK_GATEWAY_HOST') ?: '');
 
+// This portal's own real hostname (e.g. eyifwifi.online) — the single
+// source of truth admin/radius.php uses when generating the router config
+// (.rsc) and hotspot login page (login.html) downloads. Optional: leave
+// blank and those downloads fall back to auto-detecting the host from
+// whatever request downloaded them, which is fine until that guess is
+// wrong (bare-IP troubleshooting, a staging alias, a domain migration).
+// See lib/portal_host.php.
+define('PORTAL_HOST', getenv('PORTAL_HOST') ?: '');
+
 // App-level toggles read directly by setup.php / security middleware.
 define('COMPANY_NAME', getenv('COMPANY_NAME') ?: 'MangoNet');
 

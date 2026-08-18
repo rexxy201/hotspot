@@ -8,9 +8,11 @@
   device's first request is redirected here first.
 
   Generated with the portal's real host already filled in by
-  Admin -> Wi-Fi & RADIUS -> "Download hotspot login page" — this raw
-  template still has the __PORTAL_HOST__ placeholder, so don't upload
-  it as-is; download the filled-in version from the admin page.
+  Admin -> Wi-Fi & RADIUS -> "Download hotspot login page" (using the
+  Portal domain set in Setup -> Network, or auto-detected if that's
+  blank — see lib/portal_host.php) — this raw template still has the
+  __PORTAL_HOST__ placeholder, so don't upload it as-is; download the
+  filled-in version from the admin page.
 
   Upload the downloaded file to the router's hotspot files as
   login.html (Files, or IP > Hotspot > (profile) > HTML Directory).
@@ -22,6 +24,12 @@
     2. IP > Hotspot > Walled Garden:
          allow this portal's host so a device can reach it BEFORE
          it's authenticated — otherwise this very redirect is blocked.
+
+  $(error): populated by RouterOS itself (not by this app) when a login
+  attempt it just processed was rejected, and it lands a device back on
+  THIS page to try again. Forwarded through to index.php so a genuine
+  RADIUS reject (expired code, secret mismatch, daemon down) shows the
+  attendee an actual message instead of silently looping — see index.php.
 -->
 <html>
 <head>
@@ -33,14 +41,15 @@
       "mac=$(mac)" +
       "&ip=$(ip)" +
       "&link-login-only=$(link-login-only)" +
-      "&link-orig=$(link-orig)";
+      "&link-orig=$(link-orig)" +
+      "&error=$(error)";
   window.location.href = "https://__PORTAL_HOST__/index.php?" + encodeURI(params);
 </script>
 <meta http-equiv="refresh"
-      content="0; url=https://__PORTAL_HOST__/index.php?mac=$(mac)&ip=$(ip)&link-login-only=$(link-login-only)&link-orig=$(link-orig)">
+      content="0; url=https://__PORTAL_HOST__/index.php?mac=$(mac)&ip=$(ip)&link-login-only=$(link-login-only)&link-orig=$(link-orig)&error=$(error)">
 </head>
 <body style="font-family:sans-serif;text-align:center;padding-top:60px;color:#333">
   <p>Connecting you to the network…</p>
-  <p><a href="https://__PORTAL_HOST__/index.php?mac=$(mac)&amp;ip=$(ip)&amp;link-login-only=$(link-login-only)&amp;link-orig=$(link-orig)">Tap here if you are not redirected</a></p>
+  <p><a href="https://__PORTAL_HOST__/index.php?mac=$(mac)&amp;ip=$(ip)&amp;link-login-only=$(link-login-only)&amp;link-orig=$(link-orig)&amp;error=$(error)">Tap here if you are not redirected</a></p>
 </body>
 </html>

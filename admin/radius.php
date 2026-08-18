@@ -5,6 +5,7 @@ require_once __DIR__ . '/../lib/settings.php';
 require_once __DIR__ . '/../lib/credentials.php';
 require_once __DIR__ . '/../lib/radius_protocol.php';
 require_once __DIR__ . '/../lib/radius_diagnostics.php';
+require_once __DIR__ . '/../lib/portal_host.php';
 require_once __DIR__ . '/../lib/csrf.php';
 require_once __DIR__ . '/layout.php';
 require_admin_session();
@@ -18,14 +19,12 @@ $notice = '';
 // Download the router config as a .rsc file.
 if (($_GET['download'] ?? '') === 'rsc') {
     $template = (string) file_get_contents(dirname(__DIR__) . '/deploy/mikrotik-setup.rsc');
-    // HTTP_HOST is client-supplied and lands inside a quoted RouterOS string
-    // that the admin pastes into a router shell. Anything but a plain
-    // host[:port] is rejected rather than escaped, so a crafted Host header
-    // cannot close the quote and append commands.
-    $rawHost = (string) ($_SERVER['HTTP_HOST'] ?? '');
-    $portalHost = preg_match('/^[A-Za-z0-9.\-]+(:\d+)?$/', $rawHost) === 1
-        ? $rawHost
-        : 'your-portal-domain';
+    // resolve_portal_host() prefers the admin-configured PORTAL_HOST (Setup
+    // > Network) over this request's Host header — see lib/portal_host.php
+    // for why trusting the request alone was a real bug (bare-IP
+    // troubleshooting, a staging alias, or a later domain change would all
+    // silently bake the wrong host into this router-shell script).
+    $portalHost = resolve_portal_host();
     $out = strtr($template, [
         '__RADIUS_SECRET__' => (string) $settings['radius_secret'],
         '__VPS_IP__' => (string) ($_SERVER['SERVER_ADDR'] ?? 'YOUR_SERVER_IP'),
@@ -54,14 +53,9 @@ if (($_GET['download'] ?? '') === 'rsc') {
 // sibling project that does ship one.
 if (($_GET['download'] ?? '') === 'login-html') {
     $template = (string) file_get_contents(dirname(__DIR__) . '/deploy/mikrotik-login.html');
-    // Same validation as the .rsc download: a crafted Host header lands
-    // inside an HTML attribute and a URL here, not a shell string, but it's
-    // still client-supplied — reject anything but a plain host[:port] rather
-    // than trying to HTML-escape it into something meaningful.
-    $rawHost = (string) ($_SERVER['HTTP_HOST'] ?? '');
-    $portalHost = preg_match('/^[A-Za-z0-9.\-]+(:\d+)?$/', $rawHost) === 1
-        ? $rawHost
-        : 'your-portal-domain';
+    // Same resolver as the .rsc download above — same host in both files,
+    // sourced from the same one place. See lib/portal_host.php.
+    $portalHost = resolve_portal_host();
     $out = strtr($template, ['__PORTAL_HOST__' => $portalHost]);
     header('Content-Type: text/html; charset=utf-8');
     header('Content-Disposition: attachment; filename="login.html"');
@@ -121,6 +115,19 @@ admin_layout_start('radius.php', 'Wi-Fi & RADIUS', $settings);
   router's hotspot files as <code>login.html</code>, devices see Mikrotik's own
   built-in login form and never reach this app at all. See Phase 8 in
   deploy/GO-LIVE.md.
+</p>
+<p class="table-note" style="margin-bottom:var(--space-4)">
+  Both downloads above will point at <code><?= htmlspecialchars(resolve_portal_host()) ?></code>.
+  <?php if (portal_host_is_configured()): ?>
+    That's the Portal domain configured in Setup &rarr; Network — change it there
+    (re-run setup.php) and both downloads pick up the new value immediately.
+  <?php else: ?>
+    That's auto-detected from the address you're viewing this page at right now,
+    <strong>not</strong> a saved setting — if you ever load /admin/ over the
+    server's bare IP or a different alias, a download taken from there would carry
+    the wrong host. Set "Portal domain" in Setup &rarr; Network (re-run setup.php,
+    PIN-gated) to fix this permanently.
+  <?php endif; ?>
 </p>
 
 <?php if ($notice !== ''): ?><p class="warning"><?= htmlspecialchars($notice) ?></p><?php endif; ?>
