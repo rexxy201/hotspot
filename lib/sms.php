@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/app_log.php';
+
 function twilio_http_post(string $accountSid, string $authToken, string $fromNumber, string $toPhone, string $body): array {
     $url = "https://api.twilio.com/2010-04-01/Accounts/{$accountSid}/Messages.json";
     $ch = curl_init($url);
@@ -36,7 +38,7 @@ function send_code_sms(callable $transport, array $settings, string $toPhone, st
         // is only ever non-empty on exactly that kind of failure.
         $detail = $result['error'] ?? '';
         $suffix = $detail !== '' ? " ({$detail})" : '';
-        error_log('send_code_sms failed: HTTP ' . $result['status'] . ' ' . $result['body'] . $suffix);
+        app_log('send_code_sms failed: HTTP ' . $result['status'] . ' ' . $result['body'] . $suffix);
         return false;
     }
     return true;

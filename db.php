@@ -1,5 +1,11 @@
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/lib/app_log.php';
+// db.php is required by every entrypoint (index.php, connect.php, every
+// admin page, radius_server.php) — registering here, once, gives the
+// whole app the same "uncaught error reaches a readable log" safety net,
+// with no need to remember to add it to each new file individually.
+app_log_register_handlers();
 
 /**
  * Holds the single mysqli connection.

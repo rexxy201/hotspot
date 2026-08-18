@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/app_log.php';
+
 use PHPMailer\PHPMailer\PHPMailer;
 
 function build_code_email_body(array $settings, string $name, string $code): string {
@@ -20,7 +22,7 @@ function send_code_email(PHPMailer $mail, array $settings, string $toEmail, stri
     try {
         return $mail->send();
     } catch (\Exception $e) {
-        error_log('send_code_email failed: ' . $e->getMessage());
+        app_log('send_code_email failed: ' . $e->getMessage());
         return false;
     }
 }
