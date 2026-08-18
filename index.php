@@ -140,9 +140,7 @@ if (!$forget && $mikrotikError === '' && $settings['silent_login_enabled'] === '
   <div class="hero-divider">
     <span class="divider-line"></span><span class="divider-dot"></span><span class="divider-line"></span>
   </div>
-
-  <p class="hero-copy">Free Wi-Fi brought to you<br>by proud sponsors.</p>
-
+    
   <div class="hero-divider">
     <span class="divider-line"></span>
     <svg class="divider-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
