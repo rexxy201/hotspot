@@ -665,7 +665,7 @@ button[aria-busy="true"] {
   gap: var(--space-2);
 }
 
-.powered-by img { height: 32px; width: auto; }
+.powered-by img { height: 42px; width: auto; }
 
 /* --------------------------------------------------------------------------
    Admin shell — sidebar + main content
@@ -999,7 +999,7 @@ td.answer-cell {
   .logo { max-width: 208px; margin-bottom: var(--space-2); }
   .details { margin-bottom: var(--space-3); }
   .powered-by { margin-top: var(--space-2); }
-  .powered-by img { height: 26px; }
+  .powered-by img { height: 34px; }
   .hero-banner { margin-bottom: var(--space-2); }
   .hero-rule { margin: var(--space-2) 0; }
   .hero-welcome { font-size: 20px; margin-bottom: var(--space-1); }
