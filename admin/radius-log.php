@@ -3,6 +3,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../lib/settings.php';
 require_once __DIR__ . '/../lib/csrf.php';
+require_once __DIR__ . '/../lib/log_view.php';
 require_once __DIR__ . '/layout.php';
 require_admin_session();
 
@@ -11,20 +12,6 @@ $settings = get_settings($db);
 
 $logFile = dirname(__DIR__) . '/logs/radius.log';
 $restartFlag = dirname(__DIR__) . '/logs/radius.restart';
-
-/** The last $maxLines lines of a file, without reading the whole thing. */
-function tail_log(string $path, int $maxLines = 200): string
-{
-    if (!is_file($path)) {
-        return '';
-    }
-    $size = filesize($path);
-    // 64KB comfortably covers 200 lines of this log format.
-    $readFrom = max(0, $size - 65536);
-    $chunk = (string) @file_get_contents($path, false, null, $readFrom);
-    $lines = explode("\n", trim($chunk));
-    return implode("\n", array_slice($lines, -$maxLines));
-}
 
 // Plain-text endpoint the page polls, so the log refreshes without a reload.
 if (($_GET['raw'] ?? '') === '1') {

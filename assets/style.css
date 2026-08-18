@@ -639,6 +639,24 @@ button[aria-busy="true"] {
   color: var(--color-success);
 }
 
+/* The "Connecting…" spinner (see connect.php's #status-icon-connecting) is
+   the same icon slot as .success-icon but mid-progress, not yet confirmed
+   — a muted brand color rather than the success green, so it never
+   visually pre-announces a result the poll loop hasn't confirmed yet. */
+#status-icon-connecting {
+  color: var(--brand-color);
+  animation: status-spin 0.9s linear infinite;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #status-icon-connecting { animation: none; }
+}
+
+@keyframes status-spin {
+  to { transform: rotate(360deg); }
+}
+
 .warning,
 .error {
   margin: var(--space-3) 0 0;

@@ -124,7 +124,7 @@ try {
     $quotaMb = (int) ($settings['data_quota_mb'] ?? 0);
     $overQuota = $quotaMb > 0 && usage_bytes_for_code($db, $code) >= ($quotaMb * 1048576);
 } catch (\Throwable $e) {
-    error_log('connect.php: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+    app_log('connect.php: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
     http_response_code(500);
     echo '<h1>Something went wrong</h1><p>Please see event staff for help connecting.</p>';
     exit;
@@ -143,7 +143,7 @@ $linkLoginOnlyValid = filter_var($linkLoginOnly, FILTER_VALIDATE_URL) !== false
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= $overQuota ? 'Data limit reached' : 'Connected' ?> — <?= htmlspecialchars($settings['event_name']) ?></title>
+<title><?= $overQuota ? 'Data limit reached' : ($linkLoginOnlyValid ? 'Connecting…' : 'Signed up') ?> — <?= htmlspecialchars($settings['event_name']) ?></title>
 <link rel="stylesheet" href="<?= asset_url(__DIR__, 'assets/style.css') ?>">
 <style>:root { --brand-color: <?= htmlspecialchars($settings['brand_color']) ?>; }</style>
 </head>
@@ -160,30 +160,118 @@ $linkLoginOnlyValid = filter_var($linkLoginOnly, FILTER_VALIDATE_URL) !== false
       <p class="code-label">Your code</p>
       <strong class="code" id="code"><?= htmlspecialchars($code) ?></strong>
       <p class="hint">Keep this code — it's still your entry for the prize draw.</p>
+    <?php elseif ($linkLoginOnlyValid): ?>
+    <?php // Honest by construction: this page cannot actually know the router
+          // accepted the login the instant it renders — the auto-submit below
+          // fires into a hidden form this script never sees the response of.
+          // Claiming "You're connected" unconditionally here used to mean
+          // exactly that: a claim, not a fact. Now it starts as "Connecting…"
+          // and only becomes "You're connected" once connect-status.php
+          // confirms the router actually sent RADIUS accounting for this
+          // code — see the poll loop below and lib/usage.php. ?>
+    <svg class="success-icon" id="status-icon-connecting" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+      <path d="M12 2a10 10 0 0 1 10 10"></path>
+    </svg>
+    <svg class="success-icon" id="status-icon-connected" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" hidden>
+      <circle cx="12" cy="12" r="10"></circle>
+      <path d="m8 12 3 3 5-6"></path>
+    </svg>
+    <h1 id="status-heading">Connecting you now…</h1>
+    <p class="code-label">Your code</p>
+    <strong class="code" id="code"><?= htmlspecialchars($code) ?></strong>
+    <p class="hint">Save this code — it's your entry for the prize draw either way.</p>
+    <p class="hint" id="status-note">This takes a few seconds.</p>
+
+    <?php if (!$emailSent): ?><p class="warning">We couldn't email your code — it's shown above, please save it.</p><?php endif; ?>
+    <?php if (!$smsSent): ?><p class="warning">We couldn't text your code — it's shown above, please save it.</p><?php endif; ?>
+
+    <form id="mikrotik-login" method="POST" action="<?= htmlspecialchars($linkLoginOnly) ?>">
+      <input type="hidden" name="username" value="<?= htmlspecialchars($code) ?>">
+      <input type="hidden" name="password" value="<?= htmlspecialchars($code) ?>">
+      <noscript><button type="submit">Continue to internet</button></noscript>
+    </form>
+    <script>
+    (function () {
+      document.getElementById('mikrotik-login').submit();
+
+      var heading = document.getElementById('status-heading');
+      var note = document.getElementById('status-note');
+      var spinner = document.getElementById('status-icon-connecting');
+      var check = document.getElementById('status-icon-connected');
+      var code = <?= json_encode($code) ?>;
+
+      var elapsedMs = 0;
+      var POLL_EVERY_MS = 2000;
+      var GIVE_UP_AFTER_MS = 25000;
+      // A couple of seconds' head start before the first poll: the form
+      // above has to actually reach the router and the router has to
+      // process it before any accounting record could possibly exist yet,
+      // so polling immediately would only spend the budget on guaranteed
+      // early misses.
+      var START_DELAY_MS = 2500;
+
+      var showConnected = function () {
+        spinner.hidden = true;
+        check.hidden = false;
+        heading.textContent = "You're connected";
+        note.textContent = '';
+      };
+
+      var showTimedOut = function () {
+        heading.textContent = "Signed up — having trouble getting online?";
+        note.textContent = 'Your code above is already saved either way. If Wi-Fi still isn\'t working, show it to event staff.';
+      };
+
+      var poll = function () {
+        elapsedMs += POLL_EVERY_MS;
+        fetch('connect-status.php?code=' + encodeURIComponent(code), { cache: 'no-store' })
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .then(function (data) {
+            if (data && data.connected) {
+              showConnected();
+              return;
+            }
+            if (elapsedMs >= GIVE_UP_AFTER_MS) {
+              showTimedOut();
+              return;
+            }
+            setTimeout(poll, POLL_EVERY_MS);
+          })
+          .catch(function () {
+            // A transient fetch failure isn't a verdict either way — keep
+            // trying within the same overall budget rather than giving up
+            // on one dropped request.
+            if (elapsedMs >= GIVE_UP_AFTER_MS) {
+              showTimedOut();
+              return;
+            }
+            setTimeout(poll, POLL_EVERY_MS);
+          });
+      };
+
+      setTimeout(poll, START_DELAY_MS);
+    })();
+    </script>
     <?php else: ?>
+    <?php // No real router handoff was even attempted (e.g. this page was
+          // reached without valid Mikrotik redirect params) — so there is
+          // nothing to honestly claim about internet access either way.
+          // Signed-up-but-neutral, not a connectivity claim. ?>
     <svg class="success-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
       <circle cx="12" cy="12" r="10"></circle>
       <path d="m8 12 3 3 5-6"></path>
     </svg>
-    <h1>You're connected</h1>
+    <h1>You're signed up</h1>
     <p class="code-label">Your code</p>
     <strong class="code" id="code"><?= htmlspecialchars($code) ?></strong>
     <p class="hint">Save this code — it's your entry for the prize draw.</p>
 
     <?php if (!$emailSent): ?><p class="warning">We couldn't email your code — it's shown above, please save it.</p><?php endif; ?>
     <?php if (!$smsSent): ?><p class="warning">We couldn't text your code — it's shown above, please save it.</p><?php endif; ?>
-
-    <?php endif; ?>
-    <?php // Never auto-login an over-quota code: the router would refuse it and
-          // replace the explanation above with its own error page. ?>
-    <?php if (!$overQuota && $linkLoginOnlyValid): ?>
-      <form id="mikrotik-login" method="POST" action="<?= htmlspecialchars($linkLoginOnly) ?>">
-        <input type="hidden" name="username" value="<?= htmlspecialchars($code) ?>">
-        <input type="hidden" name="password" value="<?= htmlspecialchars($code) ?>">
-        <button type="submit">Continue to internet</button>
-      </form>
-      <script>document.getElementById('mikrotik-login').submit();</script>
     <?php endif; ?>
   </div>
 
