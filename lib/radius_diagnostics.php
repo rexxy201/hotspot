@@ -9,6 +9,25 @@
 require_once __DIR__ . '/radius_protocol.php';
 
 /**
+ * Last non-empty line of the daemon's own log, if readable. Appended to
+ * every failure message below: when none of the other checks pin down the
+ * cause (the process is alive, sockets are fine, yet nothing answers), the
+ * daemon's last logged line is usually the fastest way to see why without
+ * a separate trip to the RADIUS Log page.
+ */
+function radius_log_tail(): string
+{
+    $path = dirname(__DIR__) . '/logs/radius.log';
+    if (!is_file($path) || !is_readable($path)) {
+        return '';
+    }
+    $size = filesize($path);
+    $chunk = (string) @file_get_contents($path, false, null, max(0, $size - 4096));
+    $lines = array_filter(explode("\n", trim($chunk)), fn($l) => trim($l) !== '');
+    return $lines ? trim((string) end($lines)) : '';
+}
+
+/**
  * Probe the daemon over loopback and explain precisely what is wrong.
  *
  * Any reply — Accept or Reject — proves the daemon is listening; only a
@@ -55,11 +74,14 @@ function radius_diagnose(array $settings): array
         return [true, "The daemon is UP and answering on UDP {$port}. For live logins also confirm: (1) UDP {$port} is open inbound on the server firewall, and (2) the router's public IP below matches the router — the daemon ignores packets from anywhere else."];
     }
 
+    $tail = radius_log_tail();
+    $tailNote = $tail !== '' ? " Last line of logs/radius.log: \"{$tail}\"." : '';
+
     if (!is_file($pidFile)) {
-        return [false, "Nothing answered on UDP {$port} and there is no logs/radius.pid — the daemon has never been started. Run: bash start_radius.sh start"];
+        return [false, "Nothing answered on UDP {$port} and there is no logs/radius.pid — the daemon has never been started. Run: bash start_radius.sh start{$tailNote}"];
     }
     if (!$pidAlive) {
-        return [false, "Nothing answered on UDP {$port} and the process in logs/radius.pid is gone — it crashed or was killed. Check the RADIUS Log page, then run: bash start_radius.sh restart"];
+        return [false, "Nothing answered on UDP {$port} and the process in logs/radius.pid is gone — it crashed or was killed. Check the RADIUS Log page, then run: bash start_radius.sh restart{$tailNote}"];
     }
-    return [false, "The daemon process is alive but nothing answered on UDP {$port}. It probably could not bind the port (another process using it?). Check the RADIUS Log page."];
+    return [false, "The daemon process is alive but nothing answered on UDP {$port}. It probably could not bind the port (another process using it?). Check the RADIUS Log page.{$tailNote}"];
 }

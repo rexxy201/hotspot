@@ -92,10 +92,26 @@ status() {
     fi
 }
 
+# Silent, idempotent start-if-not-running — for a cron fallback on hosts with
+# no systemd access (prefer deploy/mangonet-radius.service on a VPS; this is
+# the belt to that unit's braces, or the only option on shared hosting):
+#   * * * * * cd /path/to/app && bash start_radius.sh cron >/dev/null 2>&1
+# Deliberately quiet on success (cron mails any stdout by default) — only
+# prints if it actually had to start the daemon back up.
+cron_heal() {
+    if is_running; then
+        return 0
+    fi
+    nohup "$PHP_BIN" "$RADIUS_SCRIPT" >> "$LOG_FILE" 2>&1 &
+    echo $! > "$PID_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') RADIUS daemon was not running — restarted (PID $!)"
+}
+
 case "${1:-start}" in
     start)   start ;;
     stop)    stop ;;
     restart) stop; sleep 1; start ;;
     status)  status ;;
-    *) echo "Usage: bash start_radius.sh {start|stop|restart|status}"; exit 1 ;;
+    cron)    cron_heal ;;
+    *) echo "Usage: bash start_radius.sh {start|stop|restart|status|cron}"; exit 1 ;;
 esac
