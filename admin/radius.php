@@ -104,7 +104,7 @@ admin_layout_start('radius.php', 'Wi-Fi & RADIUS', $settings);
   </div>
   <div class="page-actions">
     <a class="btn-link secondary" href="?download=rsc">Download router config</a>
-    <a class="btn-link secondary" href="?download=login-html">Download hotspot login page</a>
+    <button type="button" id="open-login-instructions" class="btn-link secondary">Download hotspot login page</button>
   </div>
 </div>
 
@@ -190,4 +190,117 @@ admin_layout_start('radius.php', 'Wi-Fi & RADIUS', $settings);
     <button type="submit">Save RADIUS settings</button>
   </form>
 </section>
+
+<?php // Loads the file into a hidden iframe on click rather than letting the
+      // trigger button be a plain link: Content-Disposition:attachment
+      // saves the file without navigating this tab away, so the
+      // instructions modal below can open in that same click instead of
+      // racing a page unload. ?>
+<iframe id="login-html-download-frame" hidden aria-hidden="true" title="Hotspot login page download"></iframe>
+
+<?php // Router setup walkthrough, shown every time "Download hotspot login
+      // page" is clicked. Deliberately NOT dismissible the normal way (no
+      // × button, no backdrop click, no Escape) — closing requires typing
+      // the confirmation phrase below, so it can't be reflexively clicked
+      // past and forgotten before the router is actually configured. See
+      // the script at the bottom of this file. ?>
+<div class="modal-overlay" id="login-instructions-modal" hidden>
+  <div class="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="login-instructions-title">
+    <h2 id="login-instructions-title" tabindex="-1">Configure the router — start to finish</h2>
+    <p class="table-note">
+      Your download just started (check your browser's downloads) — pre-filled with
+      this portal's host, <code><?= htmlspecialchars(resolve_portal_host()) ?></code>.
+      Work through every step below on the router itself before closing this.
+    </p>
+
+    <ol class="modal-steps">
+      <li>
+        <strong>Save the downloaded file as <code>login.html</code>.</strong>
+        <p>It already started downloading behind this window. If you need it again later, close this and click the button once more.</p>
+      </li>
+      <li>
+        <strong>Find your two hotspot profile names on the router.</strong>
+        <p>In Winbox/WebFig's terminal: <code>/ip hotspot profile print</code> and <code>/ip hotspot user profile print</code>. Usually <code>hsprof1</code> and <code>default</code> — the "Download router config" .rsc file assumes exactly that, so edit it first if yours are named differently.</p>
+      </li>
+      <li>
+        <strong>Upload <code>login.html</code> to the router.</strong>
+        <p>Files (drag the download in), or IP &rarr; Hotspot &rarr; Server Profiles &rarr; (your profile) &rarr; General tab &rarr; HTML Directory. RouterOS ships a default <code>hotspot</code> folder — if your profile points there, replace that folder's own <code>login.html</code> with this one.</p>
+      </li>
+      <li>
+        <strong>Turn on the login method this app needs.</strong>
+        <p>IP &rarr; Hotspot &rarr; Server Profiles &rarr; (your profile) &rarr; Login tab &rarr; check <strong>HTTP CHAP</strong> and/or <strong>HTTP PAP</strong>. Without one of these the router rejects the credentials this portal posts to it after sign-up.</p>
+      </li>
+      <li>
+        <strong>Allow this portal through the Walled Garden.</strong>
+        <p>IP &rarr; Hotspot &rarr; Walled Garden &rarr; add <code>dst-host = <?= htmlspecialchars(resolve_portal_host()) ?></code>, action <code>allow</code>. Already done automatically if you've imported the "Download router config" .rsc file below — check there first rather than adding a duplicate entry.</p>
+      </li>
+      <li>
+        <strong>Import the RADIUS config too, if you haven't yet.</strong>
+        <p>"Download router config" above gives you the matching <code>.rsc</code> file — that one sets up RADIUS itself; this one only routes phones to this portal in the first place. Both are required together.</p>
+      </li>
+      <li>
+        <strong>Test it on a real phone.</strong>
+        <p>Forget/disconnect this Wi-Fi network on a phone, rejoin it, and confirm it lands on <em>this</em> portal — not Mikrotik's own plain login form. If it still shows Mikrotik's default page, the HTML Directory in step 3 isn't pointing at the file you just uploaded.</p>
+      </li>
+    </ol>
+
+    <div class="modal-lock">
+      <div class="field">
+        <label for="login-instructions-confirm">Type <code>configured</code> once every step above is actually done on the router:</label>
+        <input type="text" id="login-instructions-confirm" autocomplete="off" spellcheck="false" placeholder="configured">
+      </div>
+      <button type="button" id="login-instructions-confirm-btn" disabled>I'm done configuring the router</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var openBtn = document.getElementById('open-login-instructions');
+  var modal = document.getElementById('login-instructions-modal');
+  var frame = document.getElementById('login-html-download-frame');
+  var title = document.getElementById('login-instructions-title');
+  var confirmInput = document.getElementById('login-instructions-confirm');
+  var confirmBtn = document.getElementById('login-instructions-confirm-btn');
+  if (!openBtn || !modal || !confirmInput || !confirmBtn) return;
+
+  var CONFIRM_PHRASE = 'configured';
+
+  var checkMatch = function () {
+    confirmBtn.disabled = confirmInput.value.trim().toLowerCase() !== CONFIRM_PHRASE;
+  };
+
+  openBtn.addEventListener('click', function () {
+    // Cache-bust so a second click re-downloads instead of the browser
+    // silently no-op'ing an unchanged iframe src.
+    if (frame) frame.src = 'radius.php?download=login-html&_=' + Date.now();
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    confirmInput.value = '';
+    checkMatch();
+    // Focus the heading, not the input — this modal is meant to be read
+    // start to finish before anyone reaches for the confirmation field.
+    if (title) title.focus();
+  });
+
+  confirmInput.addEventListener('input', checkMatch);
+  confirmInput.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' && !confirmBtn.disabled) {
+      event.preventDefault();
+      confirmBtn.click();
+    }
+  });
+
+  confirmBtn.addEventListener('click', function () {
+    if (confirmInput.value.trim().toLowerCase() !== CONFIRM_PHRASE) return;
+    modal.hidden = true;
+    document.body.style.overflow = '';
+    openBtn.focus();
+  });
+
+  // No backdrop-click, Escape-key, or × handler is wired up on purpose —
+  // see the comment above the modal markup. Typing the phrase and clicking
+  // the button above is the only way this closes.
+})();
+</script>
 <?php admin_layout_end(); ?>
