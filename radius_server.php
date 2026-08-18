@@ -34,6 +34,25 @@ const LOG_DIR = __DIR__ . '/logs';
 const LOG_MAX_BYTES = 8388608;
 
 /**
+ * Whether $nasIp means "accept a packet from any source" rather than a real
+ * single address to match against.
+ *
+ * Blank is the documented wildcard (see Admin -> Wi-Fi & RADIUS's field
+ * hint: "Leave blank to accept any source"). "0.0.0.0" is treated exactly
+ * the same way — it LOOKS like a wildcard/placeholder value and is exactly
+ * what got typed into this field once already (a router IP genuinely was
+ * not known yet), but as a literal string it is a strict allowlist of
+ * "packets whose source address is 0.0.0.0" — which no real packet ever
+ * is, so every real login attempt was silently dropped. Treating both the
+ * same closes that whole failure mode rather than just this one instance
+ * of it.
+ */
+function nas_ip_unrestricted(string $nasIp): bool
+{
+    return $nasIp === '' || $nasIp === '0.0.0.0';
+}
+
+/**
  * Whether stdout looks like a terminal a person is reading.
  *
  * posix_isatty() is absent on Windows and on PHP builds without ext-posix, so
@@ -166,9 +185,20 @@ if ($secret === '') {
     exit(1);
 }
 
-if ($allowedNasIp === '') {
-    fwrite(STDERR, "[RADIUS] radius_nas_ip is not set. The daemon would accept RADIUS packets from any device on the network, and CHAP does not involve the shared secret — so any of them could brute-force attendee codes. Set the router's public IP in Admin -> Wi-Fi & RADIUS.\n");
-    exit(1);
+if (nas_ip_unrestricted($allowedNasIp)) {
+    // Warn loudly, but do NOT exit: the live-reload block below (search
+    // "Re-read the trusted router IP") already accepts this same value
+    // while the daemon is already running — an admin can save the field
+    // blank from the UI and the daemon just keeps going with a wider
+    // allowlist. Exiting only here, at startup, meant that exact same
+    // saved value crash-looped the daemon on its next restart (systemd
+    // auto-restart, a server reboot, or the admin's own "Restart daemon"
+    // button): found live, 2026-08-18 — every start attempt exited
+    // immediately and took every real attendee offline completely,
+    // instead of merely running under the already-accepted reduced
+    // defense-in-depth this value has always meant. Consistency between
+    // "just started" and "already running" matters more than a hard stop.
+    radius_log('WARNING: radius_nas_ip is not restricting anything (it is blank or 0.0.0.0) — accepting RADIUS packets from ANY source. CHAP does not involve the shared secret, so anyone on the network could attempt to brute-force attendee codes. Set the router\'s real public IP in Admin -> Wi-Fi & RADIUS once you have a stable one.');
 }
 
 if ($bindPort < 1 || $bindPort > 65535) {
@@ -225,7 +255,7 @@ if (function_exists('pcntl_async_signals')) {
 
 radius_log("Listening on UDP 0.0.0.0:{$bindPort}");
 radius_log("Accounting on UDP 0.0.0.0:{$acctPort}");
-radius_log('Trusted router IP: ' . ($allowedNasIp !== '' ? $allowedNasIp : 'any (not restricted)'));
+radius_log('Trusted router IP: ' . (nas_ip_unrestricted($allowedNasIp) ? 'any (not restricted)' : $allowedNasIp));
 
 $lastSettingsReload = time();
 
@@ -260,12 +290,14 @@ while (true) {
                 $secret = (string) $fresh['radius_secret'];
             }
             if ((string) $fresh['radius_nas_ip'] !== $allowedNasIp) {
-                radius_log("Trusted router IP changed to: " . ($fresh['radius_nas_ip'] ?: 'any'));
-                $allowedNasIp = (string) $fresh['radius_nas_ip'];
+                $newNasIp = (string) $fresh['radius_nas_ip'];
+                radius_log('Trusted router IP changed to: ' . (nas_ip_unrestricted($newNasIp) ? 'any (not restricted)' : $newNasIp));
+                if (nas_ip_unrestricted($newNasIp) && !nas_ip_unrestricted($allowedNasIp)) {
+                    radius_log('WARNING: radius_nas_ip was just widened to unrestricted — accepting RADIUS packets from ANY source. CHAP does not involve the shared secret, so anyone on the network could attempt to brute-force attendee codes.');
+                }
+                $allowedNasIp = $newNasIp;
             }
             $settings = $fresh;
-            // No "unrestricted" warning here: the daemon fails fast at startup
-            // when radius_nas_ip is empty, so it cannot be running in that state.
         } catch (Throwable $e) {
             radius_log('Could not reload settings: ' . $e->getMessage());
         }
@@ -305,7 +337,7 @@ while (true) {
         // from 127.0.0.1, not from the router. This applies to the accounting
         // socket exactly as it does to the auth socket.
         $isLocal = ($from === '127.0.0.1' || $from === '::1');
-        if ($allowedNasIp !== '' && !$isLocal && $from !== $allowedNasIp) {
+        if (!nas_ip_unrestricted($allowedNasIp) && !$isLocal && $from !== $allowedNasIp) {
             radius_log_drop($from, $allowedNasIp);
             continue;
         }

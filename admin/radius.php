@@ -159,7 +159,7 @@ admin_layout_start('radius.php', 'Wi-Fi & RADIUS', $settings);
       <label for="radius_nas_ip">Router public IP</label>
       <input type="text" id="radius_nas_ip" name="radius_nas_ip"
              value="<?= htmlspecialchars($settings['radius_nas_ip']) ?>" placeholder="e.g. 102.89.x.x">
-      <p class="field-hint">The daemon ignores RADIUS packets from any other address. Leave blank to accept any source (testing only).</p>
+      <p class="field-hint">The daemon ignores RADIUS packets from any other address. Leave blank (or type <code>0.0.0.0</code> — both mean the same thing here) to accept any source. If the router's public IP isn't fixed (common on an LTE/mobile uplink — it can rotate every few hours), leave this blank rather than pasting in whatever IP you see right now: a stale IP here silently blocks every real login once the router's address changes, with no error shown to attendees or staff.</p>
     </div>
     <div class="field">
       <label for="session_minutes">Session length (minutes)</label>
