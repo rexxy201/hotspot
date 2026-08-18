@@ -18,6 +18,14 @@
 require_once __DIR__ . '/lib/env.php';
 require_once __DIR__ . '/lib/csrf.php';
 require_once __DIR__ . '/lib/assets.php';
+// Deliberately not config.php (see the class comment above — this page has
+// to keep working before a real config exists), so it can't pick up the
+// app-log safety net that lives there. lib/app_log.php has no dependency
+// on config/DB/APP_KEY at all, so it's safe standalone here too — this
+// page runs DB connection tests, SMTP/Twilio probes, and the danger-zone
+// drop/recreate, all real surface area for something to throw unexpectedly.
+require_once __DIR__ . '/lib/app_log.php';
+app_log_register_handlers();
 
 $envPath = __DIR__ . '/.env';
 $envExisted = is_file($envPath);

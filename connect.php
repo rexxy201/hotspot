@@ -9,6 +9,7 @@ require_once __DIR__ . '/lib/sms.php';
 require_once __DIR__ . '/lib/usage.php';
 require_once __DIR__ . '/lib/assets.php';
 require_once __DIR__ . '/lib/edo_lga.php';
+require_once __DIR__ . '/lib/log_safe.php';
 
 function validate_submission(array $post): array {
     $errors = [];
@@ -148,7 +149,7 @@ $linkLoginOnlyValid = $linkLoginOnlyHost !== '' && $linkLoginOnlyHost === MIKROT
 // digging. Logging it here means the NEXT time this happens, Admin ->
 // Error Log shows it within seconds instead.
 if ($linkLoginOnlyHost !== '' && !$linkLoginOnlyValid) {
-    app_log("connect.php: link-login-only host '{$linkLoginOnlyHost}' does not match configured MIKROTIK_GATEWAY_HOST '" . MIKROTIK_GATEWAY_HOST . "' — auto-login to the router was skipped. If the router's hotspot hostname changed, update MIKROTIK_GATEWAY_HOST in Setup -> Network to match.");
+    app_log("connect.php: link-login-only host '" . log_safe_value($linkLoginOnlyHost) . "' does not match configured MIKROTIK_GATEWAY_HOST '" . MIKROTIK_GATEWAY_HOST . "' — auto-login to the router was skipped. If the router's hotspot hostname changed, update MIKROTIK_GATEWAY_HOST in Setup -> Network to match.");
 }
 ?>
 <!DOCTYPE html>

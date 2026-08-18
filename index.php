@@ -4,6 +4,7 @@ require_once __DIR__ . '/lib/settings.php';
 require_once __DIR__ . '/lib/credentials.php';
 require_once __DIR__ . '/lib/assets.php';
 require_once __DIR__ . '/lib/edo_lga.php';
+require_once __DIR__ . '/lib/log_safe.php';
 
 $db = get_db();
 $settings = get_settings($db);
@@ -49,6 +50,14 @@ $silentLoginUrl = '';
 // or the daemon being down, none of which a retry fixes on its own; the
 // attendee deserves to see that rather than an unexplained loop.
 $mikrotikError = trim((string) ($_GET['error'] ?? ''));
+if ($mikrotikError !== '') {
+    // Previously shown to the attendee ON THEIR PHONE and nowhere else — an
+    // admin had no way to see this without standing next to them and asking
+    // what their screen said. A real reject usually means something worth
+    // knowing about at scale (an expired/revoked code, a RADIUS secret
+    // mismatch, the daemon being down), so it belongs in Error Log too.
+    app_log('index.php: Mikrotik reported a login error for mac=' . log_safe_value((string) ($_GET['mac'] ?? '')) . ': ' . log_safe_value($mikrotikError, 200));
+}
 
 // An explicit "not you?" click always wins — a borrowed or handed-on phone must
 // be able to reach the form.
@@ -80,7 +89,7 @@ if (!$forget && $mikrotikError === '' && $settings['silent_login_enabled'] === '
             // mismatched host here means silent reconnect for a KNOWN device
             // silently degrades to the full form instead — worth a log line
             // for the same "router hostname changed" reason.
-            app_log("index.php: link-login-only host '{$candidateHost}' does not match configured MIKROTIK_GATEWAY_HOST '" . MIKROTIK_GATEWAY_HOST . "' — silent reconnect was skipped.");
+            app_log("index.php: link-login-only host '" . log_safe_value($candidateHost) . "' does not match configured MIKROTIK_GATEWAY_HOST '" . MIKROTIK_GATEWAY_HOST . "' — silent reconnect was skipped.");
         }
     }
 }
