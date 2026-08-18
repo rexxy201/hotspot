@@ -213,8 +213,21 @@ The **server** profile is typically `hsprof1`; the **user** profile is typically
 - [ ] Admin → **Wi-Fi & RADIUS** → **Download router config**
 - [ ] Open the `.rsc` and check the two profile names match yours. **Edit them if not.**
 - [ ] Upload to the router and run `/import file=eyif-radius.rsc`
-- [ ] Point the hotspot login page at `https://<your-domain>/index.php`
-- [ ] Confirm the walled garden allows your portal host
+- [ ] Admin → **Wi-Fi & RADIUS** → **Download hotspot login page** — this is
+      `login.html`, and it's not optional decoration: without it on the
+      router, a connecting phone never reaches this portal at all. It sees
+      Mikrotik's own generic built-in login form instead, and nothing here
+      (RADIUS, the raffle form, silent reconnect) ever engages — this is the
+      step "point the login page at the portal" actually means in practice.
+      Upload the downloaded file to the router's hotspot files as
+      `login.html` (Files, or the profile's HTML Directory setting), then
+      confirm the profile's HTML Directory points at the folder holding it —
+      RouterOS ships a default `hotspot` folder and template files under
+      that name; if your profile still points there, replacing that
+      folder's `login.html` is enough.
+- [ ] Confirm the walled garden allows your portal host — the login page's
+      very first redirect needs to reach it before the device is
+      authenticated, so this has to be right before the step above works.
 
 > The `shared-users=1` line is what stops one code working on unlimited devices.
 > It targets the **user** profile. If that name is wrong, the line silently does

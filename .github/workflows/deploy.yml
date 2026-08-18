@@ -73,6 +73,15 @@ jobs:
             "mkdir -p ${{ secrets.SSH_REMOTE_DIR }}/uploads/logos ${{ secrets.SSH_REMOTE_DIR }}/logs"
 
       - name: Deploy via rsync over SSH
+        # deploy/ is intentionally NOT in the --exclude list below (unlike
+        # docs/ and tests/, which really are dev-only): admin/radius.php
+        # reads deploy/mikrotik-setup.rsc and deploy/mikrotik-login.html at
+        # runtime for its "Download router config" / "Download hotspot
+        # login page" buttons. Excluding it (an earlier version of this
+        # workflow did) silently broke both of those buttons for as long as
+        # that line existed — found by hand, not by a test, when adding the
+        # login-page download. .htaccess already blocks direct web access to
+        # /deploy/, so nothing here needs a second layer of hiding via rsync.
         run: |
           rsync -az --delete \
             -e "ssh -p ${{ secrets.SSH_PORT }} -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
@@ -83,7 +92,6 @@ jobs:
             --exclude='.env.*' \
             --exclude='docs/' \
             --exclude='tests/' \
-            --exclude='deploy/' \
             --exclude='uploads/logos/' \
             --exclude='logs/' \
             --exclude='*.log' \

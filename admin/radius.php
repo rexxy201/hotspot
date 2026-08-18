@@ -45,6 +45,30 @@ if (($_GET['download'] ?? '') === 'rsc') {
     exit;
 }
 
+// Download the hotspot login-page bridge, with this portal's real host
+// filled in. Without this file uploaded to the router, a device's first
+// request never reaches index.php at all — it sees Mikrotik's own built-in
+// login form instead, and nothing in this app (RADIUS, the raffle form,
+// silent reconnect) ever engages. This was in the original design spec but
+// never actually shipped as a file — added after comparing against a
+// sibling project that does ship one.
+if (($_GET['download'] ?? '') === 'login-html') {
+    $template = (string) file_get_contents(dirname(__DIR__) . '/deploy/mikrotik-login.html');
+    // Same validation as the .rsc download: a crafted Host header lands
+    // inside an HTML attribute and a URL here, not a shell string, but it's
+    // still client-supplied — reject anything but a plain host[:port] rather
+    // than trying to HTML-escape it into something meaningful.
+    $rawHost = (string) ($_SERVER['HTTP_HOST'] ?? '');
+    $portalHost = preg_match('/^[A-Za-z0-9.\-]+(:\d+)?$/', $rawHost) === 1
+        ? $rawHost
+        : 'your-portal-domain';
+    $out = strtr($template, ['__PORTAL_HOST__' => $portalHost]);
+    header('Content-Type: text/html; charset=utf-8');
+    header('Content-Disposition: attachment; filename="login.html"');
+    echo $out;
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_verify()) {
     $error = 'That form had expired — nothing was saved. Please try again.';
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -86,8 +110,18 @@ admin_layout_start('radius.php', 'Wi-Fi & RADIUS', $settings);
   </div>
   <div class="page-actions">
     <a class="btn-link secondary" href="?download=rsc">Download router config</a>
+    <a class="btn-link secondary" href="?download=login-html">Download hotspot login page</a>
   </div>
 </div>
+
+<p class="table-note" style="margin-bottom:var(--space-4)">
+  <strong>Both files need to reach the router before any of this works.</strong>
+  The router config sets up RADIUS; the hotspot login page is what actually sends a
+  connecting phone to this portal in the first place — without it uploaded to the
+  router's hotspot files as <code>login.html</code>, devices see Mikrotik's own
+  built-in login form and never reach this app at all. See Phase 8 in
+  deploy/GO-LIVE.md.
+</p>
 
 <?php if ($notice !== ''): ?><p class="warning"><?= htmlspecialchars($notice) ?></p><?php endif; ?>
 <?php if ($error !== ''): ?><p class="error" role="alert"><?= htmlspecialchars($error) ?></p><?php endif; ?>

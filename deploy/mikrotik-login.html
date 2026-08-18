@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<!--
+  MikroTik Hotspot login page -> external captive portal bridge.
+  ------------------------------------------------------------------
+  Without this file, the router shows its own generic built-in login
+  form and NEVER reaches this app's index.php at all — nothing in this
+  project (RADIUS, the raffle form, silent reconnect) engages until a
+  device's first request is redirected here first.
+
+  Generated with the portal's real host already filled in by
+  Admin -> Wi-Fi & RADIUS -> "Download hotspot login page" — this raw
+  template still has the __PORTAL_HOST__ placeholder, so don't upload
+  it as-is; download the filled-in version from the admin page.
+
+  Upload the downloaded file to the router's hotspot files as
+  login.html (Files, or IP > Hotspot > (profile) > HTML Directory).
+
+  Requirements on the router (see deploy/GO-LIVE.md Phase 8):
+    1. IP > Hotspot > Server Profiles > (your profile) > Login:
+         HTTP CHAP and/or HTTP PAP enabled — index.php's form posts
+         plain username/password back through this redirect chain.
+    2. IP > Hotspot > Walled Garden:
+         allow this portal's host so a device can reach it BEFORE
+         it's authenticated — otherwise this very redirect is blocked.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connecting…</title>
+<script type="text/javascript">
+  var params =
+      "mac=$(mac)" +
+      "&ip=$(ip)" +
+      "&link-login-only=$(link-login-only)" +
+      "&link-orig=$(link-orig)";
+  window.location.href = "https://__PORTAL_HOST__/index.php?" + encodeURI(params);
+</script>
+<meta http-equiv="refresh"
+      content="0; url=https://__PORTAL_HOST__/index.php?mac=$(mac)&ip=$(ip)&link-login-only=$(link-login-only)&link-orig=$(link-orig)">
+</head>
+<body style="font-family:sans-serif;text-align:center;padding-top:60px;color:#333">
+  <p>Connecting you to the network…</p>
+  <p><a href="https://__PORTAL_HOST__/index.php?mac=$(mac)&amp;ip=$(ip)&amp;link-login-only=$(link-login-only)&amp;link-orig=$(link-orig)">Tap here if you are not redirected</a></p>
+</body>
+</html>
