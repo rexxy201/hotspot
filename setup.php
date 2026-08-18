@@ -274,6 +274,16 @@ function check_daemon(array $envValues, array $posted = []): array
         );
         require_once __DIR__ . '/lib/settings.php';
         require_once __DIR__ . '/lib/radius_diagnostics.php';
+        // get_settings() decrypts radius_secret via setting_decrypt(), which
+        // reads the APP_KEY constant directly — normally defined by
+        // config.php, but setup.php deliberately never loads config.php (it
+        // reads .env itself so it keeps working even before a real APP_KEY
+        // exists). Only surfaced once a real secret was actually encrypted;
+        // harmless before that because setting_decrypt() short-circuits on
+        // an unencrypted value without ever touching APP_KEY.
+        if (!defined('APP_KEY')) {
+            define('APP_KEY', $envValues['APP_KEY'] ?? '');
+        }
         $settings = get_settings($db);
         $db->close();
         return radius_diagnose($settings);

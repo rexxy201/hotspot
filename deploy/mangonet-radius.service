@@ -12,7 +12,12 @@
 
 [Unit]
 Description=EYIF Wi-Fi Portal RADIUS daemon
-After=network.target mysql.service
+# Both names listed: MySQL and MariaDB use different unit names depending on
+# the distro/panel, and listing a unit that doesn't exist on this box is a
+# harmless no-op (systemd just skips the ordering for it) — cheaper than
+# guessing wrong and silently losing the ordering guarantee. Confirmed this
+# server's actual database is mariadb.service, not mysql.service.
+After=network.target mysql.service mariadb.service
 
 [Service]
 Type=simple
