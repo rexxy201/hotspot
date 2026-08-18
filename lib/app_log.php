@@ -45,7 +45,27 @@ function app_log(string $message): void
 function app_log_register_handlers(): void
 {
     set_exception_handler(function (\Throwable $e): void {
-        app_log('UNCAUGHT ' . get_class($e) . ': ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+        $summary = 'UNCAUGHT ' . get_class($e) . ': ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine();
+        app_log($summary);
+
+        // Registering a handler REPLACES PHP's default uncaught-exception
+        // behaviour (print the fatal to stderr, exit non-zero). Logging alone
+        // therefore made crashes *quieter* than before this file existed: a
+        // failing CLI script printed nothing and exited 0, so `php test.php`
+        // looked like it passed when it had actually died, and a
+        // radius_server.php crash would have vanished from journalctl. Restore
+        // both behaviours explicitly.
+        if (PHP_SAPI === 'cli') {
+            fwrite(STDERR, $summary . "\n" . $e->getTraceAsString() . "\n");
+            exit(255);
+        }
+        // Web: deliberately NOT echoing the message — it can contain paths,
+        // query values and DB errors that must not reach a visitor. The log
+        // above is where the detail belongs; the visitor just gets a 500.
+        if (!headers_sent()) {
+            http_response_code(500);
+        }
+        exit(1);
     });
     register_shutdown_function(function (): void {
         $error = error_get_last();

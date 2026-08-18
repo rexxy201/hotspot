@@ -151,6 +151,16 @@ $linkLoginOnlyValid = $linkLoginOnlyHost !== '' && $linkLoginOnlyHost === MIKROT
 if ($linkLoginOnlyHost !== '' && !$linkLoginOnlyValid) {
     app_log("connect.php: link-login-only host '" . log_safe_value($linkLoginOnlyHost) . "' does not match configured MIKROTIK_GATEWAY_HOST '" . MIKROTIK_GATEWAY_HOST . "' — auto-login to the router was skipped. If the router's hotspot hostname changed, update MIKROTIK_GATEWAY_HOST in Setup -> Network to match.");
 }
+
+// Which credential the browser posts to the router. Normally the attendee's
+// own code (validated by the router against our RADIUS daemon); when a
+// fallback login is configured, that shared local-router credential instead,
+// which takes RADIUS out of the path completely. See SETTINGS_DEFAULTS.
+$fallbackUser = (string) ($settings['fallback_login_username'] ?? '');
+$fallbackPass = (string) ($settings['fallback_login_password'] ?? '');
+$usingFallbackLogin = $fallbackUser !== '';
+$routerLoginUsername = $usingFallbackLogin ? $fallbackUser : $code;
+$routerLoginPassword = $usingFallbackLogin ? $fallbackPass : $code;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -203,8 +213,8 @@ if ($linkLoginOnlyHost !== '' && !$linkLoginOnlyValid) {
     <?php if (!$smsSent): ?><p class="warning">We couldn't text your code — it's shown above, please save it.</p><?php endif; ?>
 
     <form id="mikrotik-login" method="POST" action="<?= htmlspecialchars($linkLoginOnly) ?>">
-      <input type="hidden" name="username" value="<?= htmlspecialchars($code) ?>">
-      <input type="hidden" name="password" value="<?= htmlspecialchars($code) ?>">
+      <input type="hidden" name="username" value="<?= htmlspecialchars($routerLoginUsername) ?>">
+      <input type="hidden" name="password" value="<?= htmlspecialchars($routerLoginPassword) ?>">
       <noscript><button type="submit">Continue to internet</button></noscript>
     </form>
     <script>
@@ -216,6 +226,29 @@ if ($linkLoginOnlyHost !== '' && !$linkLoginOnlyValid) {
       var spinner = document.getElementById('status-icon-connecting');
       var check = document.getElementById('status-icon-connected');
       var code = <?= json_encode($code) ?>;
+      var usingFallbackLogin = <?= $usingFallbackLogin ? 'true' : 'false' ?>;
+
+      // In fallback mode the router authenticates against its OWN local user
+      // database and never contacts our RADIUS daemon, so no accounting
+      // record for this code will ever appear — polling for one would always
+      // "fail" and wrongly tell a successfully-connected attendee that
+      // something went wrong. There is genuinely no signal to poll here, so
+      // don't pretend otherwise: offer a manual button if the redirect the
+      // router normally performs hasn't already replaced this page.
+      if (usingFallbackLogin) {
+        setTimeout(function () {
+          heading.textContent = 'Almost there';
+          note.innerHTML = 'If you are not online yet, tap <strong>Continue to internet</strong> below.';
+          var manual = document.createElement('button');
+          manual.type = 'button';
+          manual.textContent = 'Continue to internet';
+          manual.addEventListener('click', function () {
+            document.getElementById('mikrotik-login').submit();
+          });
+          note.parentNode.insertBefore(manual, note.nextSibling);
+        }, 8000);
+        return;
+      }
 
       var elapsedMs = 0;
       var POLL_EVERY_MS = 2000;
