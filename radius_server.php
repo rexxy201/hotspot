@@ -27,6 +27,7 @@ require_once __DIR__ . '/lib/settings.php';
 require_once __DIR__ . '/lib/credentials.php';
 require_once __DIR__ . '/lib/radius_protocol.php';
 require_once __DIR__ . '/lib/usage.php';
+require_once __DIR__ . '/lib/log_safe.php';
 
 const LOG_DIR = __DIR__ . '/logs';
 // Rotate at 8MB. The daemon can be flooded by any device on the event SSID,
@@ -138,14 +139,14 @@ function radius_log_drop(string $from, string $expected, string $reason = ''): v
 }
 
 /**
- * Make a wire-supplied value safe to write into a line-oriented log: strip
- * anything non-printable (a newline would let a crafted username forge whole
- * log entries) and cap the length.
+ * Make a wire-supplied value safe to write into a line-oriented log. Thin
+ * wrapper kept under its original name so every existing call site in this
+ * file is untouched — see lib/log_safe.php for the actual logic and why
+ * it's shared now.
  */
 function radius_log_safe(string $value, int $max = 64): string
 {
-    $clean = preg_replace('/[^\x20-\x7E]/', '.', substr($value, 0, $max));
-    return $clean === '' ? '(empty)' : $clean;
+    return log_safe_value($value, $max);
 }
 
 /**

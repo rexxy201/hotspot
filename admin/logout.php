@@ -1,4 +1,12 @@
 <?php
+// Deliberately kept independent of config.php/db.php — sign-out should
+// never fail just because the database is having a bad moment — but still
+// gets the same app-log safety net directly, for the same reason every
+// other page does: an uncaught error here should be visible somewhere,
+// not just a blank page.
+require_once __DIR__ . '/../lib/app_log.php';
+app_log_register_handlers();
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

@@ -5,9 +5,13 @@
  * log — the file the admin RADIUS Log page renders.
  *
  * radius_server.php cannot be required here (it binds a socket and loops), so
- * the function is loaded by extracting it from the source.
+ * the function is loaded by extracting it from the source. radius_log_safe()
+ * is now a thin wrapper around lib/log_safe.php's shared log_safe_value()
+ * (the same sanitiser other entrypoints use too) — load that first so the
+ * eval'd wrapper has something to call.
  */
 require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/../lib/log_safe.php';
 
 $source = file_get_contents(__DIR__ . '/../radius_server.php');
 if (!preg_match('/function radius_log_safe\(.*?\n\}/s', $source, $m)) {

@@ -18,6 +18,16 @@
 require_once __DIR__ . '/lib/env.php';
 load_env(__DIR__ . '/.env');
 
+// The app-log safety net, registered here rather than in db.php: config.php
+// is required more broadly (admin/login.php and almightypush.php both pull
+// it in directly, without going through db.php), so every page that reaches
+// this line — which is nearly the whole app — gets "an uncaught error lands
+// in a readable log" for free. The one deliberate exception is setup.php,
+// which never loads config.php (it has to keep working before a real config
+// exists) and registers the same handlers on its own instead.
+require_once __DIR__ . '/lib/app_log.php';
+app_log_register_handlers();
+
 // Database
 define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
 define('DB_NAME', getenv('DB_NAME') ?: 'wifi_portal');
