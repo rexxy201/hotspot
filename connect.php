@@ -134,9 +134,22 @@ $emailSent = send_code_email(make_smtp_mailer(), $settings, $email, $name, $code
 $smsSent = send_code_sms('twilio_http_post', $settings, $phone, $code);
 
 $linkLoginOnly = $_POST['mikrotik_link-login-only'] ?? '';
-$linkLoginOnlyValid = filter_var($linkLoginOnly, FILTER_VALIDATE_URL) !== false
+$linkLoginOnlyHost = filter_var($linkLoginOnly, FILTER_VALIDATE_URL) !== false
     && in_array(parse_url($linkLoginOnly, PHP_URL_SCHEME), ['http', 'https'], true)
-    && parse_url($linkLoginOnly, PHP_URL_HOST) === MIKROTIK_GATEWAY_HOST;
+    ? (string) parse_url($linkLoginOnly, PHP_URL_HOST)
+    : '';
+$linkLoginOnlyValid = $linkLoginOnlyHost !== '' && $linkLoginOnlyHost === MIKROTIK_GATEWAY_HOST;
+// A present-but-non-matching host is worth a loud log line, not silent
+// fall-through to the neutral "signed up" page: this exact situation —
+// the router's hotspot hostname changing (DHCP re-registration, an admin
+// renaming the hotspot server) out from under a MIKROTIK_GATEWAY_HOST
+// that was correct when it was set — is what silently broke every real
+// attendee's auto-login on 2026-08-18 until caught by hand via SSH log
+// digging. Logging it here means the NEXT time this happens, Admin ->
+// Error Log shows it within seconds instead.
+if ($linkLoginOnlyHost !== '' && !$linkLoginOnlyValid) {
+    app_log("connect.php: link-login-only host '{$linkLoginOnlyHost}' does not match configured MIKROTIK_GATEWAY_HOST '" . MIKROTIK_GATEWAY_HOST . "' — auto-login to the router was skipped. If the router's hotspot hostname changed, update MIKROTIK_GATEWAY_HOST in Setup -> Network to match.");
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
