@@ -43,7 +43,7 @@ assert_equals(7000000000, usage_bytes_for_code($db, '77776666'), 'usage above 4G
 // pins it so a future join or cascade cannot break it silently.
 require_once __DIR__ . '/../lib/entries.php';
 $db->query("DELETE FROM entries WHERE email = 'usage.invariant@example.com'");
-create_entry($db, 'Usage Invariant', '08011112222', 'usage.invariant@example.com', '11112222');
+create_entry($db, 'Usage Invariant', '08011112222', 'usage.invariant@example.com', '11112222', 'Egor', 'Reliable internet access.');
 
 reset_usage_for_code($db, '11112222');
 

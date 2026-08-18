@@ -109,14 +109,59 @@ function test_db_connection(string $host, string $name, string $user, string $pa
 const REQUIRED_TABLES = ['entries', 'settings', 'wifi_credentials', 'radius_sessions'];
 
 /**
+ * Additive-only column migrations, applied every time ensure_schema()
+ * confirms the required TABLES all exist (whether they already existed or
+ * were just created from schema.sql moments earlier). This is what lets a
+ * column added to entries in code actually reach an already-populated
+ * LIVE database: loading schema.sql only ever runs against a completely
+ * empty database (see ensure_schema() below), so without this, a table
+ * that already exists keeps whatever columns it had the day it was first
+ * created, forever — schema.sql changing in the repo would never reach it.
+ *
+ * Deliberately just a flat list, not a real migrations framework: every
+ * statement here MUST be an idempotent, additive `ADD COLUMN IF NOT
+ * EXISTS` (supported since MariaDB 10.0.2 / MySQL 8.0.29). Never a DROP,
+ * never a data-touching UPDATE — this runs automatically, unattended,
+ * against a live database, on every Setup save.
+ *
+ * @return string[] Any statements that failed (empty array = all clean —
+ *   including the common case where every column already exists, which
+ *   IF NOT EXISTS makes a silent no-op, not a failure).
+ */
+function apply_schema_migrations(mysqli $db): array
+{
+    $migrations = [
+        // LGA + raffle survey question added to the sign-up form — see
+        // lib/edo_lga.php and index.php's #connect-form.
+        "ALTER TABLE entries ADD COLUMN IF NOT EXISTS lga VARCHAR(64) NOT NULL DEFAULT '' AFTER email",
+        "ALTER TABLE entries ADD COLUMN IF NOT EXISTS tech_question TEXT NULL AFTER lga",
+    ];
+    $failures = [];
+    foreach ($migrations as $sql) {
+        try {
+            $db->query($sql);
+        } catch (\Throwable $e) {
+            // Caught per-statement, not left to the caller's try/catch —
+            // a migration hiccup must never read as "the connection
+            // failed" and block saving otherwise-valid DB credentials.
+            $failures[] = $e->getMessage();
+        }
+    }
+    return $failures;
+}
+
+/**
  * Connect with the given credentials and make sure the schema is actually
  * there. Runs on every save, not just the first one, and only ever
  * CREATES — never drops or touches existing data:
- *   - Every required table already exists: no-op, silent.
+ *   - Every required table already exists: apply any pending additive
+ *     column migrations (see apply_schema_migrations()), then no-op.
  *   - The database is completely empty (a fresh one — exactly the state
  *     that took the site down once already, when a re-run pointed
  *     setup.php at a new database and nobody separately remembered to
- *     load schema.sql by hand): load schema.sql automatically. Safe
+ *     load schema.sql by hand): load schema.sql automatically, then run
+ *     the same migrations (harmless no-ops against a fresh schema.sql
+ *     that already has the columns, but keeps this one code path). Safe
  *     because an empty database has nothing to lose.
  *   - Some but not all required tables exist (an unexpected half-built
  *     state): touch nothing, surface a warning instead. Auto-fixing a
@@ -145,7 +190,11 @@ function ensure_schema(string $host, string $name, string $user, string $pass, s
         $present = array_intersect(REQUIRED_TABLES, $existing);
 
         if (empty($missing)) {
+            $failures = apply_schema_migrations($db);
             $db->close();
+            if (!empty($failures)) {
+                return [true, 'Connected — the required tables are all present, but a routine column check hit an error and was skipped: ' . implode('; ', $failures) . '. Nothing else was affected; ask for help if a newer feature then says a column is missing.'];
+            }
             return [true, ''];
         }
 
@@ -161,6 +210,7 @@ function ensure_schema(string $host, string $name, string $user, string $pass, s
                     $res->free();
                 }
             } while ($db->more_results() && $db->next_result());
+            apply_schema_migrations($db);
             $db->close();
             return [true, 'This looked like a brand-new, empty database, so the required tables were created automatically from schema.sql.'];
         }

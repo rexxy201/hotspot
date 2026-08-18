@@ -24,9 +24,9 @@ function generate_unique_code(mysqli $db): string {
     return $code;
 }
 
-function create_entry(mysqli $db, string $name, string $phone, string $email, string $code): void {
-    $stmt = $db->prepare('INSERT INTO entries (name, phone, email, code) VALUES (?, ?, ?, ?)');
-    $stmt->bind_param('ssss', $name, $phone, $email, $code);
+function create_entry(mysqli $db, string $name, string $phone, string $email, string $code, string $lga, string $techQuestion): void {
+    $stmt = $db->prepare('INSERT INTO entries (name, phone, email, code, lga, tech_question) VALUES (?, ?, ?, ?, ?, ?)');
+    $stmt->bind_param('ssssss', $name, $phone, $email, $code, $lga, $techQuestion);
     $stmt->execute();
     $stmt->close();
 }

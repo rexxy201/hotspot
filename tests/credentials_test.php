@@ -44,7 +44,7 @@ assert_true($touched['last_used_at'] !== null, 'touch_credential records last_us
 // invariant the admin revoke button must not break.
 require_once __DIR__ . '/../lib/entries.php';
 $db->query("DELETE FROM entries WHERE email = 'revoke.test@example.com'");
-create_entry($db, 'Revoke Test', '08099998888', 'revoke.test@example.com', '31313131');
+create_entry($db, 'Revoke Test', '08099998888', 'revoke.test@example.com', '31313131', 'Ikpoba-Okha', 'Access to affordable data.');
 issue_credential($db, '31313131', 60);
 assert_true(find_valid_credential($db, '31313131') !== null, 'the credential exists before revoking');
 

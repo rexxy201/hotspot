@@ -60,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reset
 // PHP and MySQL in different timezones, so date arithmetic on expires_at here
 // would be wrong by the offset.
 $result = $db->query(
-    'SELECT e.name, e.phone, e.email, e.code, e.created_at,
+    'SELECT e.name, e.phone, e.email, e.lga, e.tech_question, e.code, e.created_at,
             c.expires_at,
             c.mac,
             TIMESTAMPDIFF(SECOND, NOW(), c.expires_at) AS seconds_remaining,
@@ -78,12 +78,14 @@ if (($_GET['export'] ?? '') === 'csv') {
     header('Content-Type: text/csv');
     header('Content-Disposition: attachment; filename="entries.csv"');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['Name', 'Phone', 'Email', 'Code', 'Submitted At'], ',', '"', '\\');
+    fputcsv($out, ['Name', 'Phone', 'Email', 'LGA', 'Biggest Tech Problem', 'Code', 'Submitted At'], ',', '"', '\\');
     while ($row = $result->fetch_assoc()) {
         fputcsv($out, [
             csv_safe_field($row['name']),
             csv_safe_field($row['phone']),
             csv_safe_field($row['email']),
+            csv_safe_field($row['lga']),
+            csv_safe_field((string) ($row['tech_question'] ?? '')),
             csv_safe_field($row['code']),
             $row['created_at'],
         ], ',', '"', '\\');
@@ -147,7 +149,8 @@ admin_layout_start('entries.php', 'Raffle Entries', $settings);
       <table>
         <thead>
           <tr>
-            <th>Name</th><th>Phone</th><th>Email</th><th>Code</th>
+            <th>Name</th><th>Phone</th><th>Email</th><th>LGA</th>
+            <th>Biggest tech problem</th><th>Code</th>
             <th>Submitted</th><th>Wi-Fi</th>
             <th>Data</th><th></th>
           </tr>
@@ -162,6 +165,8 @@ admin_layout_start('entries.php', 'Raffle Entries', $settings);
             <td><?= htmlspecialchars($row['name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
             <td><?= htmlspecialchars($row['phone'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
             <td><?= htmlspecialchars($row['email'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
+            <td><?= htmlspecialchars($row['lga'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
+            <td class="answer-cell" title="<?= htmlspecialchars((string) ($row['tech_question'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"><?= htmlspecialchars((string) ($row['tech_question'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
             <td class="code-cell"><?= htmlspecialchars($row['code'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
             <td><?= htmlspecialchars($row['created_at'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
             <td>

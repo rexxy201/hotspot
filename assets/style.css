@@ -529,7 +529,9 @@ input[type="text"],
 input[type="tel"],
 input[type="email"],
 input[type="password"],
-input[type="color"] {
+input[type="color"],
+select,
+textarea {
   width: 100%;
   /* 46px keeps the tap target above the 44px minimum. */
   min-height: 46px;
@@ -544,6 +546,8 @@ input[type="color"] {
 }
 
 input[type="color"] { padding: var(--space-1); height: 46px; cursor: pointer; }
+select { cursor: pointer; }
+textarea { min-height: 84px; resize: vertical; line-height: 1.4; }
 
 input:focus-visible,
 button:focus-visible,
@@ -903,6 +907,21 @@ td.code-cell {
   font-weight: 700;
   letter-spacing: .06em;
   color: var(--color-accent);
+}
+
+/* Free-text survey answers vary wildly in length — the table's default
+   white-space:nowrap (th, td above) would force one huge horizontal row
+   per entry instead. Wrap within a capped width and let the full answer
+   show as a native tooltip (title attribute) rather than growing the row
+   or the table's horizontal scroll to fit the longest answer collected. */
+td.answer-cell {
+  white-space: normal;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .empty {
