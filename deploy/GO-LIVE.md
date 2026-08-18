@@ -210,6 +210,14 @@ different names.**
 The **server** profile is typically `hsprof1`; the **user** profile is typically
 `default`. The generated config assumes exactly that.
 
+- [ ] Both downloads below bake in "this portal's host" — check the note
+      above the buttons on that page. It's either the **Portal domain** you
+      set in Setup → Network (authoritative, survives you loading /admin/
+      from a different address later), or auto-detected from whatever
+      address you're viewing /admin/ from right now (fine, but re-download
+      if you ever access it a different way). Set Portal domain once if
+      you want this to stop being a "make sure you're on the right URL"
+      step forever.
 - [ ] Admin → **Wi-Fi & RADIUS** → **Download router config**
 - [ ] Open the `.rsc` and check the two profile names match yours. **Edit them if not.**
 - [ ] Upload to the router and run `/import file=eyif-radius.rsc`

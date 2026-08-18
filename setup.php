@@ -67,6 +67,7 @@ function write_env_file(string $path, array $values): bool
         'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM_EMAIL', 'SMTP_FROM_NAME',
         'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM_NUMBER',
         'MIKROTIK_GATEWAY_HOST',
+        'PORTAL_HOST',
         'COMPANY_NAME',
         'SETUP_ACCESS_CODE',
     ];
@@ -508,6 +509,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         'TWILIO_AUTH_TOKEN' => ($_POST['TWILIO_AUTH_TOKEN'] ?? '') !== '' ? $_POST['TWILIO_AUTH_TOKEN'] : ($current['TWILIO_AUTH_TOKEN'] ?? ''),
         'TWILIO_FROM_NUMBER' => trim((string) ($_POST['TWILIO_FROM_NUMBER'] ?? '')),
         'MIKROTIK_GATEWAY_HOST' => trim((string) ($_POST['MIKROTIK_GATEWAY_HOST'] ?? '')),
+        'PORTAL_HOST' => trim((string) ($_POST['PORTAL_HOST'] ?? '')),
         'COMPANY_NAME' => trim((string) ($_POST['COMPANY_NAME'] ?? '')) ?: 'MangoNet',
         'SETUP_ACCESS_CODE' => trim((string) ($_POST['SETUP_ACCESS_CODE'] ?? '')) ?: ($current['SETUP_ACCESS_CODE'] ?? '2112'),
     ];
@@ -700,6 +702,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         <label for="MIKROTIK_GATEWAY_HOST">Mikrotik hotspot gateway IP</label>
         <input type="text" id="MIKROTIK_GATEWAY_HOST" name="MIKROTIK_GATEWAY_HOST" value="<?= htmlspecialchars($current['MIKROTIK_GATEWAY_HOST'] ?? '') ?>" placeholder="10.5.50.1">
         <p class="field-hint">The router's hotspot gateway. Required for the auto-login handoff after an attendee submits the form — see index.php.</p>
+      </div>
+      <div class="field">
+        <label for="PORTAL_HOST">Portal domain</label>
+        <input type="text" id="PORTAL_HOST" name="PORTAL_HOST" value="<?= htmlspecialchars($current['PORTAL_HOST'] ?? '') ?>" placeholder="e.g. eyifwifi.online">
+        <p class="field-hint">This site's real hostname. Admin &rarr; Wi-Fi &amp; RADIUS uses this — not whatever address you happen to be viewing /admin/ from — when generating the router config (.rsc) and hotspot login page (login.html) downloads, so those files stay correct even if you troubleshoot over the server's bare IP or the domain changes later. Leave blank to auto-detect from the current request instead (fine until that guess is wrong).</p>
       </div>
       <div class="field">
         <label for="COMPANY_NAME">Company name</label>

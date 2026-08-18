@@ -41,11 +41,26 @@ $mikrotikParams = [
 $silentCode = '';
 $silentLoginUrl = '';
 
+// Populated by Mikrotik itself (not by this app) when a login attempt it
+// just processed was rejected and it has sent the device back to the
+// hotspot login page to try again — see deploy/mikrotik-login.html. A real
+// reject usually means an expired/revoked code, a RADIUS secret mismatch,
+// or the daemon being down, none of which a retry fixes on its own; the
+// attendee deserves to see that rather than an unexplained loop.
+$mikrotikError = trim((string) ($_GET['error'] ?? ''));
+
 // An explicit "not you?" click always wins — a borrowed or handed-on phone must
 // be able to reach the form.
 $forget = ($_GET['forget'] ?? '') === '1';
 
-if (!$forget && $settings['silent_login_enabled'] === '1' && $mikrotikParams['mac'] !== '') {
+// A pending error means the LAST auto-submit (silent or otherwise) just
+// failed at the router. Retrying the same auto-submit would only recreate
+// the same failure — and since Mikrotik sends the device back through
+// login.html on every reject, that failure mode is a real infinite loop,
+// not a hypothetical one. Force the manual form instead so the attendee
+// (or, per session on a shared laptop) isn't stuck watching "Reconnecting…"
+// bounce forever.
+if (!$forget && $mikrotikError === '' && $settings['silent_login_enabled'] === '1' && $mikrotikParams['mac'] !== '') {
     $known = find_valid_credential_by_mac($db, $mikrotikParams['mac']);
     if ($known !== null) {
         // Same validation the success page applies: only auto-post to the
@@ -101,6 +116,14 @@ if (!$forget && $settings['silent_login_enabled'] === '1' && $mikrotikParams['ma
       <p class="hint"><a href="index.php?<?= htmlspecialchars(http_build_query(['forget' => '1'] + $mikrotikParams), ENT_QUOTES) ?>">Not you? Sign in with your own details</a></p>
   </div>
   <?php else: ?>
+  <?php // $(error) from Mikrotik itself — see the $mikrotikError comment
+        // above. Shown once, right where the attendee lands after a
+        // rejected login, before anything else on the page. ?>
+  <?php if ($mikrotikError !== ''): ?>
+    <p class="error" role="alert" style="max-width:420px;margin-left:auto;margin-right:auto;">
+      Wi-Fi login didn't go through (<?= htmlspecialchars($mikrotikError) ?>). Please try again below.
+    </p>
+  <?php endif; ?>
   <?php // Single designed banner (logo + partner/sponsor logos + headline)
         // — admin-uploadable via Branding Settings, so nothing here is
         // fixed to one event's artwork. Falls back to the bundled EYIF 2.0
