@@ -19,16 +19,21 @@ RewriteEngine On
 RewriteCond %{REQUEST_URI} ^/\.env [OR]
 RewriteCond %{REQUEST_URI} ^/\.git [OR]
 RewriteCond %{REQUEST_URI} \.(log|sql)$ [OR]
-RewriteCond %{REQUEST_URI} ^/(config\.php|composer\.(json|lock)|schema\.sql|start_radius\.sh|hash_password\.php|deploy_info\.json)$
+RewriteCond %{REQUEST_URI} ^/(config\.php|composer\.(json|lock)|schema\.sql|start_radius\.sh|hash_password\.php|deploy_info\.json)$ [OR]
+RewriteCond %{REQUEST_URI} ^/(docs|tests|deploy)(/|$)
 RewriteRule ^ - [F,L]
 
 # Real Apache (not this project's actual host, but kept for portability):
-# the rewrite rule above already covers dotfiles/.git/logs/sql on any
-# server, but FilesMatch gives a second layer where it's actually honored.
+# the rewrite rule above already covers dotfiles/.git/logs/sql/docs/tests/
+# deploy on any server, but FilesMatch/DirectoryMatch give a second layer
+# where they're actually honored.
 <IfModule mod_authz_core.c>
     <FilesMatch "^\.env|^\.git|\.(log|sql)$|^(config\.php|composer\.(json|lock)|schema\.sql|start_radius\.sh|hash_password\.php|deploy_info\.json)$">
         Require all denied
     </FilesMatch>
+    <DirectoryMatch "/(docs|tests|deploy)(/|$)">
+        Require all denied
+    </DirectoryMatch>
 </IfModule>
 
 # No directory listings anywhere under the docroot. (On this project's
