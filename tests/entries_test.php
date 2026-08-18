@@ -12,7 +12,7 @@ $code = generate_unique_code($db);
 assert_equals(8, strlen($code), 'generate_unique_code returns an 8-character string');
 assert_true(ctype_digit($code), 'generate_unique_code returns digits only');
 
-create_entry($db, 'Jane Doe', '08010000000', 'jane@example.com', $code);
+create_entry($db, 'Jane Doe', '08010000000', 'jane@example.com', $code, 'Oredo', 'Better road network coverage.');
 
 $foundByEmail = find_entry_by_email_or_phone($db, 'jane@example.com', '00000000000');
 assert_equals($code, $foundByEmail['code'], 'find_entry_by_email_or_phone matches by email');

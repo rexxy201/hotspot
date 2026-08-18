@@ -3,6 +3,13 @@ CREATE TABLE IF NOT EXISTS entries (
   name VARCHAR(255) NOT NULL,
   phone VARCHAR(32) NOT NULL UNIQUE,
   email VARCHAR(255) NOT NULL UNIQUE,
+  -- One of the 18 Edo State LGAs — see lib/edo_lga.php, the single source
+  -- of truth both the form dropdown and connect.php's validation read from.
+  lga VARCHAR(64) NOT NULL DEFAULT '',
+  -- Free-text answer to the sign-up form's raffle/survey question ("What
+  -- is the biggest technology problem Edo should solve?"). NULL, not '',
+  -- for rows from before this column existed.
+  tech_question TEXT NULL,
   code CHAR(8) NOT NULL UNIQUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

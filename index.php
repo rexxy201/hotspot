@@ -3,6 +3,7 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/lib/settings.php';
 require_once __DIR__ . '/lib/credentials.php';
 require_once __DIR__ . '/lib/assets.php';
+require_once __DIR__ . '/lib/edo_lga.php';
 
 $db = get_db();
 $settings = get_settings($db);
@@ -203,6 +204,19 @@ if (!$forget && $mikrotikError === '' && $settings['silent_login_enabled'] === '
         <div class="field">
           <label for="email">Email Address</label>
           <input type="email" id="email" name="email" autocomplete="email" inputmode="email" required>
+        </div>
+        <div class="field">
+          <label for="lga">LGA</label>
+          <select id="lga" name="lga" required>
+            <option value="" disabled selected>Select your LGA</option>
+            <?php foreach (EDO_LGAS as $lgaOption): ?>
+              <option value="<?= htmlspecialchars($lgaOption) ?>"><?= htmlspecialchars($lgaOption) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="field">
+          <label for="tech_question">What is the biggest technology problem Edo should solve?</label>
+          <textarea id="tech_question" name="tech_question" rows="3" maxlength="1000" required></textarea>
         </div>
         <?php foreach ($mikrotikParams as $key => $value): ?>
           <input type="hidden" name="mikrotik_<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars($value) ?>">

@@ -8,12 +8,17 @@ require_once __DIR__ . '/lib/mailer.php';
 require_once __DIR__ . '/lib/sms.php';
 require_once __DIR__ . '/lib/usage.php';
 require_once __DIR__ . '/lib/assets.php';
+require_once __DIR__ . '/lib/edo_lga.php';
 
 function validate_submission(array $post): array {
     $errors = [];
     $name = trim($post['name'] ?? '');
     $phone = trim($post['phone'] ?? '');
     $email = trim($post['email'] ?? '');
+    $lga = trim($post['lga'] ?? '');
+    // A textarea, so newlines are expected content, not something to
+    // collapse — only trim the ends.
+    $techQuestion = trim($post['tech_question'] ?? '');
 
     if ($name === '') {
         $errors[] = 'Name is required.';
@@ -24,12 +29,23 @@ function validate_submission(array $post): array {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'Enter a valid email address.';
     }
-    return [$errors, $name, $phone, $email];
+    // Validated against the fixed EDO_LGAS list, not just "non-empty" — the
+    // form only ever offers those 18 values, so anything else means the
+    // request didn't come from the real form (or was tampered with).
+    if (!in_array($lga, EDO_LGAS, true)) {
+        $errors[] = 'Select your LGA from the list.';
+    }
+    if ($techQuestion === '') {
+        $errors[] = 'Answer the question about the biggest technology problem Edo should solve.';
+    } elseif (function_exists('mb_strlen') ? mb_strlen($techQuestion) > 1000 : strlen($techQuestion) > 1000) {
+        $errors[] = 'Keep your answer under 1000 characters.';
+    }
+    return [$errors, $name, $phone, $email, $lga, $techQuestion];
 }
 
 $db = get_db();
 
-[$errors, $name, $phone, $email] = validate_submission($_POST);
+[$errors, $name, $phone, $email, $lga, $techQuestion] = validate_submission($_POST);
 
 if (!empty($errors)) {
     http_response_code(422);
@@ -69,7 +85,7 @@ try {
     if ($existing === null) {
         $code = generate_unique_code($db);
         try {
-            create_entry($db, $name, $phone, $email, $code);
+            create_entry($db, $name, $phone, $email, $code, $lga, $techQuestion);
         } catch (mysqli_sql_exception $e) {
             // Only a duplicate-key violation (1062) on entries.email/
             // entries.phone (both UNIQUE) indicates the intended race:
