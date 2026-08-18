@@ -151,7 +151,7 @@ if (!$forget && $mikrotikError === '' && $settings['silent_login_enabled'] === '
     <span class="divider-line"></span>
   </div>
 
-  <p class="hero-copy">Connect and stand a chance<br>to win amazing prizes.</p>
+  <p class="hero-copy">Connect to the WIFI and stand a chance<br>to win amazing prizes.</p>
 
   <?php // Button sits in normal document flow now — there's real content
         // both above and below it (the page scrolls), so it no longer
@@ -169,7 +169,7 @@ if (!$forget && $mikrotikError === '' && $settings['silent_login_enabled'] === '
     <span class="divider-line"></span>
   </div>
 
-  <p class="hero-shout">Amazing prizes to be won!</p>
+  <p class="hero-shout">CONNECT-ENGAGE-WIN</p>
 
   <div class="hero-divider">
     <span class="divider-line"></span>
@@ -178,8 +178,6 @@ if (!$forget && $mikrotikError === '' && $settings['silent_login_enabled'] === '
     </svg>
     <span class="divider-line"></span>
   </div>
-
-  <p class="hero-copy">Your connection could be your winning moment.</p>
   <p class="hero-shout-sm">Stay connected. Stay inspired. Stay impactful.</p>
 
   <?php // The sign-up form lives here, hidden until "Connect to Win" opens it.
