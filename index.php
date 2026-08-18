@@ -67,12 +67,20 @@ if (!$forget && $mikrotikError === '' && $settings['silent_login_enabled'] === '
         // Same validation the success page applies: only auto-post to the
         // configured gateway, never to a host named in the query string.
         $candidate = $mikrotikParams['link-login-only'];
-        $isGateway = filter_var($candidate, FILTER_VALIDATE_URL) !== false
+        $candidateHost = filter_var($candidate, FILTER_VALIDATE_URL) !== false
             && in_array(parse_url($candidate, PHP_URL_SCHEME), ['http', 'https'], true)
-            && parse_url($candidate, PHP_URL_HOST) === MIKROTIK_GATEWAY_HOST;
+            ? (string) parse_url($candidate, PHP_URL_HOST)
+            : '';
+        $isGateway = $candidateHost !== '' && $candidateHost === MIKROTIK_GATEWAY_HOST;
         if ($isGateway) {
             $silentCode = (string) $known['username'];
             $silentLoginUrl = $candidate;
+        } elseif ($candidateHost !== '') {
+            // Same reasoning as connect.php's identical check: a present-but-
+            // mismatched host here means silent reconnect for a KNOWN device
+            // silently degrades to the full form instead — worth a log line
+            // for the same "router hostname changed" reason.
+            app_log("index.php: link-login-only host '{$candidateHost}' does not match configured MIKROTIK_GATEWAY_HOST '" . MIKROTIK_GATEWAY_HOST . "' — silent reconnect was skipped.");
         }
     }
 }
