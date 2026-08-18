@@ -104,6 +104,76 @@ function test_db_connection(string $host, string $name, string $user, string $pa
     }
 }
 
+/** The tables the app requires to run at all — see schema.sql. */
+const REQUIRED_TABLES = ['entries', 'settings', 'wifi_credentials', 'radius_sessions'];
+
+/**
+ * Connect with the given credentials and make sure the schema is actually
+ * there. Runs on every save, not just the first one, and only ever
+ * CREATES — never drops or touches existing data:
+ *   - Every required table already exists: no-op, silent.
+ *   - The database is completely empty (a fresh one — exactly the state
+ *     that took the site down once already, when a re-run pointed
+ *     setup.php at a new database and nobody separately remembered to
+ *     load schema.sql by hand): load schema.sql automatically. Safe
+ *     because an empty database has nothing to lose.
+ *   - Some but not all required tables exist (an unexpected half-built
+ *     state): touch nothing, surface a warning instead. Auto-fixing a
+ *     partial schema risks silently papering over something real, unlike
+ *     an empty database.
+ *
+ * @return array{0: bool, 1: string} [ok, message] — ok=false means the
+ *   connection itself failed (so the caller should refuse to save these
+ *   credentials at all), not that an informational warning was raised.
+ */
+function ensure_schema(string $host, string $name, string $user, string $pass, string $schemaPath): array
+{
+    try {
+        mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+        $db = mysqli_init();
+        $db->real_connect($host, $user, $pass, $name);
+
+        $existing = [];
+        if ($result = $db->query('SHOW TABLES')) {
+            while ($row = $result->fetch_row()) {
+                $existing[] = $row[0];
+            }
+        }
+
+        $missing = array_diff(REQUIRED_TABLES, $existing);
+        $present = array_intersect(REQUIRED_TABLES, $existing);
+
+        if (empty($missing)) {
+            $db->close();
+            return [true, ''];
+        }
+
+        if (empty($present)) {
+            $schemaSql = (string) file_get_contents($schemaPath);
+            if ($schemaSql === '' || !$db->multi_query($schemaSql)) {
+                $err = $db->error;
+                $db->close();
+                return [true, "Connected, but this database has no tables and schema.sql failed to load automatically: {$err}. Use Danger Zone \u{2192} Drop & recreate to try again, or load schema.sql by hand."];
+            }
+            do {
+                if ($res = $db->store_result()) {
+                    $res->free();
+                }
+            } while ($db->more_results() && $db->next_result());
+            $db->close();
+            return [true, 'This looked like a brand-new, empty database, so the required tables were created automatically from schema.sql.'];
+        }
+
+        $db->close();
+        $missingList = implode(', ', $missing);
+        return [true, "Connected, but this database is missing some expected tables ({$missingList}) — looks like a partial or unexpected schema. Nothing was changed automatically; use Danger Zone \u{2192} Drop & recreate if you want a clean rebuild (this deletes whatever is already there)."];
+    } catch (\Throwable $e) {
+        return [false, 'Could not connect with these database settings, so nothing was saved: ' . $e->getMessage()];
+    } finally {
+        mysqli_report(MYSQLI_REPORT_OFF);
+    }
+}
+
 function test_smtp_connection(string $host, int $port, string $user, string $pass): array
 {
     $autoload = __DIR__ . '/vendor/autoload.php';
@@ -167,11 +237,31 @@ function test_twilio_credentials(string $sid, string $token): array
     return [false, "Twilio returned HTTP {$status}."];
 }
 
-/** @return array{0: bool, 1: string} */
-function check_daemon(array $envValues): array
+/**
+ * @param array $envValues Saved .env values.
+ * @param array $posted    Credentials currently typed into the form, if any.
+ *                         Preferred, because during a re-run the saved .env can
+ *                         still hold the old password you came here to correct.
+ * @return array{0: bool, 1: string}
+ */
+function check_daemon(array $envValues, array $posted = []): array
 {
+    // Track where each credential came from, so a rejection can say whether it
+    // used what you just typed or the value still sitting in .env. Without this
+    // an "access denied" leaves you guessing which one was actually tried.
+    $fromForm = [];
+    foreach (['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASS'] as $k) {
+        $typed = trim((string) ($posted[$k] ?? ''));
+        if ($typed !== '') {
+            $envValues[$k] = $typed;
+            $fromForm[] = $k;
+        }
+    }
+    $passSource = in_array('DB_PASS', $fromForm, true)
+        ? 'the password you typed in step 1'
+        : 'the password saved in .env (the box was blank, which means "keep current")';
     if (($envValues['DB_HOST'] ?? '') === '') {
-        return [false, 'Save your database settings first — the daemon status is read from the settings table.'];
+        return [false, 'Enter your database settings in step 1 first — the daemon status is read from the settings table.'];
     }
     try {
         mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
@@ -188,7 +278,20 @@ function check_daemon(array $envValues): array
         $db->close();
         return radius_diagnose($settings);
     } catch (\Throwable $e) {
-        return [false, 'Could not check: ' . $e->getMessage()];
+        $msg = $e->getMessage();
+        if (stripos($msg, 'access denied') !== false) {
+            return [false, sprintf(
+                'Database login rejected. Tried %s@%s on database "%s" using %s. '
+                . 'This check reads the RADIUS port and secret from the database — it never uses SSH. '
+                . 'Note MySQL treats user@localhost and user@127.0.0.1 as different accounts. (%s)',
+                $envValues['DB_USER'] ?? '?',
+                $envValues['DB_HOST'] ?? '?',
+                $envValues['DB_NAME'] ?? '?',
+                $passSource,
+                $msg
+            )];
+        }
+        return [false, 'Could not check: ' . $msg];
     } finally {
         mysqli_report(MYSQLI_REPORT_OFF);
     }
@@ -289,7 +392,7 @@ if (($_GET['ajax'] ?? '') !== '') {
             trim((string) ($post['TWILIO_ACCOUNT_SID'] ?? '')),
             (string) ($post['TWILIO_AUTH_TOKEN'] ?? '')
         ),
-        'check_daemon' => check_daemon($current),
+        'check_daemon' => check_daemon($current, $post),
         'generate_app_key' => [true, bin2hex(random_bytes(32))],
         default => [false, 'Unknown check.'],
     };
@@ -410,6 +513,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         $errors[] = 'Set an admin password — there is no existing one to keep.';
     }
 
+    // Connect with whatever is about to be saved BEFORE saving it, and make
+    // sure the schema is actually there — this is what stops a re-run from
+    // silently pointing the live site at a database with no tables (that
+    // took the site down once already; the wizard used to just trust
+    // whatever DB fields were submitted and write them straight to .env).
+    $schemaNotice = '';
+    if (!$errors) {
+        [$schemaOk, $schemaMessage] = ensure_schema($values['DB_HOST'], $values['DB_NAME'], $values['DB_USER'], $values['DB_PASS'], __DIR__ . '/schema.sql');
+        if (!$schemaOk) {
+            $errors[] = $schemaMessage;
+        } else {
+            $schemaNotice = $schemaMessage;
+        }
+    }
+
     if ($errors) {
         $saveError = implode(' ', $errors);
     } elseif (!write_env_file($envPath, $values)) {
@@ -418,6 +536,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         $saveNotice = $envExisted
             ? 'Saved. Changes take effect on the next request — no restart needed.'
             : 'Saved! .env has been created. You can now log into /admin/ with the password you just set.';
+        if ($schemaNotice !== '') {
+            $saveNotice .= ' ' . $schemaNotice;
+        }
         $current = $values;
         $envExisted = true;
     }
@@ -581,8 +702,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
       <h2 style="color:var(--color-accent);font-size:15px;">RADIUS Daemon</h2>
       <p class="field-hint">This checks whether the background RADIUS daemon (a systemd service, not cron) is up and answering — same check the Admin → Wi-Fi &amp; RADIUS page uses. Only meaningful after your database settings are saved once.</p>
       <div class="test-row">
-        <button type="button" class="btn-inline secondary" id="check-daemon">Check daemon status</button>
-        <span class="test-result" id="daemon-result"></span>
+        <button type="button" class="btn-inline secondary" data-test="check_daemon" data-fields="DB_HOST,DB_NAME,DB_USER,DB_PASS">Check daemon status</button>
+        <span class="test-result" data-result-for="check_daemon"></span>
       </div>
     </section>
 
@@ -712,23 +833,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
           resultEl.className = 'test-result ok';
         })
         .finally(function () { genBtn.disabled = false; });
-    });
-  }
-
-  var daemonBtn = document.getElementById('check-daemon');
-  if (daemonBtn) {
-    daemonBtn.addEventListener('click', function () {
-      var resultEl = document.getElementById('daemon-result');
-      resultEl.textContent = 'Checking…';
-      resultEl.className = 'test-result';
-      daemonBtn.disabled = true;
-      fetch('setup.php?ajax=check_daemon', { method: 'POST' })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          resultEl.textContent = (data.ok ? '✓ ' : '✗ ') + data.message;
-          resultEl.className = 'test-result ' + (data.ok ? 'ok' : 'fail');
-        })
-        .finally(function () { daemonBtn.disabled = false; });
     });
   }
 
