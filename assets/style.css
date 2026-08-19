@@ -683,9 +683,9 @@ button[aria-busy="true"] {
   gap: var(--space-2);
 }
 
-/* 45px, i.e. 100x45 on screen for the supplied 200x90 asset — exactly half
-   its natural size, so it stays crisp on the 2x and 3x screens every phone
-   here has.
+/* 55px, i.e. roughly 122x55 on screen for the supplied 200x90 asset. Still
+   well under its natural size, so it stays crisp on the 2x and 3x screens
+   every phone here has — the asset only starts to soften past 90px.
 
    Height is the only dimension set: width follows the aspect ratio, so a
    replacement logo of different proportions still fits rather than being
@@ -700,7 +700,7 @@ button[aria-busy="true"] {
    vertical space genuinely runs out, take it from the margins around this
    row, not from the logo everyone is complaining about. */
 .powered-by img {
-  height: 45px;
+  height: 55px;
   width: auto;
   max-width: 100%;
   object-fit: contain;
