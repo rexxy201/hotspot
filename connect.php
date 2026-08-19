@@ -219,8 +219,7 @@ $routerLoginPassword = $usingFallbackLogin ? $fallbackPass : $code;
     </form>
     <script>
     (function () {
-      document.getElementById('mikrotik-login').submit();
-
+      var form = document.getElementById('mikrotik-login');
       var heading = document.getElementById('status-heading');
       var note = document.getElementById('status-note');
       var spinner = document.getElementById('status-icon-connecting');
@@ -229,26 +228,63 @@ $routerLoginPassword = $usingFallbackLogin ? $fallbackPass : $code;
       var usingFallbackLogin = <?= $usingFallbackLogin ? 'true' : 'false' ?>;
 
       // In fallback mode the router authenticates against its OWN local user
-      // database and never contacts our RADIUS daemon, so no accounting
-      // record for this code will ever appear — polling for one would always
-      // "fail" and wrongly tell a successfully-connected attendee that
-      // something went wrong. There is genuinely no signal to poll here, so
-      // don't pretend otherwise: offer a manual button if the redirect the
-      // router normally performs hasn't already replaced this page.
+      // database, with no RADIUS round trip to wait on. It therefore accepts
+      // INSTANTLY and redirects the browser to the internet, wiping this page
+      // out mid-render: attendees saw their code for a fraction of a second
+      // and could not read, let alone save, it. Submitting immediately (as
+      // the RADIUS path does, where the router's own latency supplies the
+      // pause) is precisely what makes the code unreadable here.
+      //
+      // So hold before handing over. The countdown is the only chance most
+      // attendees get to see their code on screen, because the moment the
+      // form is submitted this page is gone and nothing we do afterwards can
+      // run — the router, not us, decides what renders next.
+      //
+      // There is also nothing to poll for afterwards: the router never
+      // contacts our daemon in this mode, so no accounting record for this
+      // code will ever appear and connect-status.php would report failure to
+      // an attendee who is in fact online. Hence no poll loop on this path.
       if (usingFallbackLogin) {
-        setTimeout(function () {
-          heading.textContent = 'Almost there';
-          note.innerHTML = 'If you are not online yet, tap <strong>Continue to internet</strong> below.';
-          var manual = document.createElement('button');
-          manual.type = 'button';
-          manual.textContent = 'Continue to internet';
-          manual.addEventListener('click', function () {
-            document.getElementById('mikrotik-login').submit();
-          });
-          note.parentNode.insertBefore(manual, note.nextSibling);
-        }, 8000);
+        var secondsLeft = 10;
+        var submitted = false;
+
+        var go = function () {
+          if (submitted) {
+            return;
+          }
+          submitted = true;
+          form.submit();
+        };
+
+        heading.textContent = 'Save your code first';
+        spinner.hidden = true;
+        check.hidden = false;
+
+        var manual = document.createElement('button');
+        manual.type = 'button';
+        manual.textContent = 'Connect now';
+        manual.addEventListener('click', go);
+        note.parentNode.insertBefore(manual, note.nextSibling);
+
+        var tick = function () {
+          if (secondsLeft <= 0) {
+            note.textContent = 'Connecting…';
+            go();
+            return;
+          }
+          // "second"/"seconds" rather than a bare number: on a page whose
+          // whole point is an 8-digit code, a lone counting number next to it
+          // is exactly the wrong thing to put in front of someone trying to
+          // memorise one.
+          note.textContent = 'Connecting in ' + secondsLeft + (secondsLeft === 1 ? ' second' : ' seconds') + '…';
+          secondsLeft -= 1;
+          setTimeout(tick, 1000);
+        };
+        tick();
         return;
       }
+
+      form.submit();
 
       var elapsedMs = 0;
       var POLL_EVERY_MS = 2000;
