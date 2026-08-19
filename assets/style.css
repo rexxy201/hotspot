@@ -683,19 +683,24 @@ button[aria-busy="true"] {
   gap: var(--space-2);
 }
 
-/* 42px -> 50px -> 72px, asked for twice. The reason +20% did not read as
-   bigger is that this is a COMPOSITE image (ICTA mark + MangoNet wordmark
-   side by side), so its height is split between two logos and each one
-   renders at roughly half the nominal size. A single-logo lockup would look
-   large at 50px; this one does not.
+/* 45px, i.e. 100x45 on screen for the supplied 200x90 asset — exactly half
+   its natural size, so it stays crisp on the 2x and 3x screens every phone
+   here has.
 
-   72px is past the point where height alone is free on a portal that must
-   fit one screen, so the row it sits in gives space back: the top margin
-   drops a step to keep the net gain near ~14px rather than 22px. max-width
-   keeps a wide composite inside the card on a narrow phone, since the logo
-   is admin-configurable and its aspect ratio is not ours to assume. */
+   Height is the only dimension set: width follows the aspect ratio, so a
+   replacement logo of different proportions still fits rather than being
+   squashed to someone else's numbers. The logo is admin-configurable, so
+   its shape is not ours to assume; max-width keeps a wide one inside the
+   card on a narrow phone.
+
+   Do NOT add a smaller override in the short-viewport block below. One
+   lived there for the whole event, quietly winning on every phone that
+   matched it, so three separate increases to this rule changed nothing on
+   the devices that mattered and the logo stayed at 34px throughout. If
+   vertical space genuinely runs out, take it from the margins around this
+   row, not from the logo everyone is complaining about. */
 .powered-by img {
-  height: 72px;
+  height: 45px;
   width: auto;
   max-width: 100%;
   object-fit: contain;
@@ -1033,7 +1038,6 @@ td.answer-cell {
   .logo { max-width: 208px; margin-bottom: var(--space-2); }
   .details { margin-bottom: var(--space-3); }
   .powered-by { margin-top: var(--space-2); }
-  .powered-by img { height: 34px; }
   .hero-banner { margin-bottom: var(--space-2); }
   .hero-rule { margin: var(--space-2) 0; }
   .hero-welcome { font-size: 20px; margin-bottom: var(--space-1); }
