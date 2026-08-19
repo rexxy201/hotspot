@@ -320,6 +320,32 @@ mysql -u root wifi_portal -e "SELECT COUNT(*) FROM entries;"     # expect 0
 | Daemon alive, nothing answers | Something else holds UDP 1812 | `ss -lunp \| grep 1812` |
 | Portal shows a generic error | DB problem | PHP error log; the real cause is logged, not shown to attendees |
 | One code works on many phones | `shared-users=1` on the wrong profile | Phase 8 |
+| Router says **"RADIUS server is not responding"** but the log shows `ACCEPT` | The daemon answered and the router threw the answer away | See below |
+
+**"RADIUS server is not responding" is the router's message, not ours, and it
+means only one thing: it sent an Access-Request and got nothing it would
+accept back.** Check Admin → RADIUS Log first — that single line splits the
+problem in two and there is no third case:
+
+- **An `Access-Request` line appears.** Packets are arriving and the daemon is
+  replying, so the reply is being discarded at the router. Either the shared
+  secret differs (the router silently drops a reply whose Response
+  Authenticator fails, reporting this exact message), or the reply is missing
+  a Message-Authenticator — see below.
+- **Nothing appears.** Packets are not arriving at all: firewall (Phase 7), or
+  the venue ISP/CGNAT dropping outbound UDP 1812.
+
+RouterOS 7.17 turned `require-message-auth=yes-for-request-resp` on by default
+— its mitigation for BlastRADIUS (CVE-2024-3596) — and silently discards any
+Access-Accept/Reject without a Message-Authenticator (RFC 3579, attribute 80).
+The daemon sends one, so leave the router's protection **on**. If you are
+running an older build of this portal that predates that, either update it or,
+as a temporary measure only, `/radius set [find] require-message-auth=no`.
+
+Because the discard happens at the router, this failure looks identical from
+the server side to everything working: the daemon logs a cheerful `ACCEPT` for
+a login the attendee never got. Trust the router, not the daemon log, when the
+two disagree.
 
 ### Panic switches
 

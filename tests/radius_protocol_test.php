@@ -129,4 +129,49 @@ assert_true(!radius_verify_accounting($tampered, $acctSecret), 'a tampered packe
 
 assert_equals(85, R_ATTR_ACCT_INTERIM_INTERVAL, 'Acct-Interim-Interval is attribute 85');
 
+// --- Message-Authenticator (RFC 3579) ------------------------------------
+// Verified the way the ROUTER verifies it, not by re-running the daemon's own
+// arithmetic: zero the attribute back out, recompute the HMAC independently,
+// and compare. A test that just called the same helper twice would agree with
+// itself no matter how wrong the ordering was.
+$maSecret = 'shared-secret-here';
+$maReqAuth = str_repeat("\xA5", 16);
+$maAttrs = radius_encode_attr(R_ATTR_REPLY_MESSAGE, 'ok')
+         . radius_encode_attr(R_ATTR_SESSION_TIMEOUT, pack('N', 3600));
+$accept = radius_build_reply(R_ACCESS_ACCEPT, 42, $maReqAuth, $maSecret, $maAttrs);
+
+assert_equals(80, R_ATTR_MESSAGE_AUTHENTICATOR, 'Message-Authenticator is attribute 80');
+
+$acceptAttrs = substr($accept, 20);
+$parsed = radius_parse_attributes($acceptAttrs);
+assert_true(isset($parsed[R_ATTR_MESSAGE_AUTHENTICATOR]), 'an Access-Accept carries a Message-Authenticator');
+assert_equals(16, strlen($parsed[R_ATTR_MESSAGE_AUTHENTICATOR]), 'the Message-Authenticator value is 16 bytes');
+
+// The declared length must count the attribute we appended, or the router
+// treats the tail as truncated and drops the packet.
+assert_equals(strlen($accept), unpack('n', substr($accept, 2, 2))[1], 'the declared length matches the real packet length');
+
+// Recompute exactly as a router does: Message-Authenticator zeroed, REQUEST
+// authenticator in the authenticator field.
+$sentMac = $parsed[R_ATTR_MESSAGE_AUTHENTICATOR];
+$zeroedAttrs = str_replace($sentMac, str_repeat("\x00", 16), $acceptAttrs);
+$expectedMac = hash_hmac('md5', substr($accept, 0, 4) . $maReqAuth . $zeroedAttrs, $maSecret, true);
+assert_true(hash_equals($expectedMac, $sentMac), 'the Message-Authenticator verifies as a router would verify it');
+assert_true(!hash_equals(hash_hmac('md5', substr($accept, 0, 4) . $maReqAuth . $zeroedAttrs, 'wrong-secret', true), $sentMac), 'a wrong shared secret fails Message-Authenticator verification');
+
+// Adding the attribute must not have broken the Response Authenticator, which
+// is computed AFTER it and covers it.
+$expectedRespAuth = md5(substr($accept, 0, 4) . $maReqAuth . $acceptAttrs . $maSecret, true);
+assert_true(hash_equals($expectedRespAuth, substr($accept, 4, 16)), 'the Response Authenticator still verifies, and covers the Message-Authenticator');
+
+// Rejects are dropped by the router just as silently as accepts if unsigned.
+$reject = radius_build_reply(R_ACCESS_REJECT, 43, $maReqAuth, $maSecret, '');
+assert_true(isset(radius_parse_attributes(substr($reject, 20))[R_ATTR_MESSAGE_AUTHENTICATOR]), 'an Access-Reject carries a Message-Authenticator too');
+
+// Accounting is a different exchange; RFC 3579 does not define the attribute
+// there and RouterOS does not ask for it.
+$acctReply = radius_build_reply(R_ACCOUNTING_RESPONSE, 44, $maReqAuth, $maSecret, '');
+assert_true(!isset(radius_parse_attributes(substr($acctReply, 20))[R_ATTR_MESSAGE_AUTHENTICATOR]), 'an Accounting-Response does NOT carry a Message-Authenticator');
+assert_true(hash_equals(md5(substr($acctReply, 0, 4) . $maReqAuth . '' . $maSecret, true), substr($acctReply, 4, 16)), 'the Accounting-Response authenticator is unchanged');
+
 test_summary();
