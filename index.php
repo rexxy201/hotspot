@@ -40,8 +40,24 @@ $mikrotikParams = [
 //      but it does let them consume the victim's single allowed session.
 //      Closing it properly needs a device credential separate from the raffle
 //      code; see the Stage 2 plan's note.
-$silentCode = '';
+$silentUsername = '';
+$silentPassword = '';
 $silentLoginUrl = '';
+
+// Which credential a returning device posts to the router. Mirrors
+// connect.php: normally the attendee's own code, but when a fallback login is
+// configured, that shared local-router credential instead.
+//
+// Without this the fallback was only half-applied. connect.php handed new
+// sign-ups the working credential while THIS path kept posting the attendee's
+// code, so every returning device — the exact case silent login exists to
+// serve — was still routed through RADIUS. When RADIUS is the thing that is
+// broken (which is the only reason the fallback is ever switched on), those
+// attendees saw "Welcome back" and then failed, with no form in front of them
+// to retry from.
+$fallbackUser = (string) ($settings['fallback_login_username'] ?? '');
+$fallbackPass = (string) ($settings['fallback_login_password'] ?? '');
+$usingFallbackLogin = $fallbackUser !== '';
 
 // Populated by Mikrotik itself (not by this app) when a login attempt it
 // just processed was rejected and it has sent the device back to the
@@ -82,7 +98,12 @@ if (!$forget && $mikrotikError === '' && $settings['silent_login_enabled'] === '
             : '';
         $isGateway = $candidateHost !== '' && $candidateHost === MIKROTIK_GATEWAY_HOST;
         if ($isGateway) {
-            $silentCode = (string) $known['username'];
+            // The credential still has to be valid to get here: a returning
+            // device is only recognised by find_valid_credential_by_mac(). The
+            // fallback changes WHAT is posted, not WHO is let through, so an
+            // expired attendee still falls to the form and re-registers.
+            $silentUsername = $usingFallbackLogin ? $fallbackUser : (string) $known['username'];
+            $silentPassword = $usingFallbackLogin ? $fallbackPass : (string) $known['username'];
             $silentLoginUrl = $candidate;
         } elseif ($candidateHost !== '') {
             // Same reasoning as connect.php's identical check: a present-but-
@@ -117,10 +138,13 @@ if (!$forget && $mikrotikError === '' && $settings['silent_login_enabled'] === '
       <h1>Welcome back</h1>
       <p class="intro">Reconnecting you to <?= htmlspecialchars($settings['event_name']) ?> Wi-Fi…</p>
       <?php // Not rendered as visible text, but present in the hidden fields
-            // below — it has to be, to reach the router. See the note above. ?>
+            // below — it has to be, to reach the router. See the note above.
+            // In fallback mode what sits here is the SHARED router credential
+            // rather than this attendee's code, which is the same exposure
+            // connect.php already accepts on that path. ?>
       <form id="silent-login" method="POST" action="<?= htmlspecialchars($silentLoginUrl) ?>">
-        <input type="hidden" name="username" value="<?= htmlspecialchars($silentCode) ?>">
-        <input type="hidden" name="password" value="<?= htmlspecialchars($silentCode) ?>">
+        <input type="hidden" name="username" value="<?= htmlspecialchars($silentUsername) ?>">
+        <input type="hidden" name="password" value="<?= htmlspecialchars($silentPassword) ?>">
         <button type="submit">Continue</button>
       </form>
       <?php // Submits immediately: a reconnect that pauses defeats the purpose.
