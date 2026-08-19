@@ -675,7 +675,7 @@ button[aria-busy="true"] {
 
 .powered-by {
   margin: var(--space-4) 0 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-text-muted);
   display: flex;
   align-items: center;
@@ -683,7 +683,13 @@ button[aria-busy="true"] {
   gap: var(--space-2);
 }
 
-.powered-by img { height: 42px; width: auto; }
+/* 42px -> 50px (+20%). The lockup sits at the very bottom of a portal that
+   must fit one screen without scrolling, so this is the practical ceiling:
+   the 8px it costs comes straight out of the margin around the card, and
+   anything larger starts pushing the Connect button towards the fold on a
+   small phone. The label steps 13px -> 14px with it, or a bigger mark
+   against unchanged text reads as mismatched rather than as bigger. */
+.powered-by img { height: 50px; width: auto; }
 
 /* --------------------------------------------------------------------------
    Admin shell — sidebar + main content
