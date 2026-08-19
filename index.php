@@ -5,6 +5,7 @@ require_once __DIR__ . '/lib/credentials.php';
 require_once __DIR__ . '/lib/assets.php';
 require_once __DIR__ . '/lib/edo_lga.php';
 require_once __DIR__ . '/lib/log_safe.php';
+require_once __DIR__ . '/lib/portal_host.php';
 
 $db = get_db();
 $settings = get_settings($db);
@@ -258,6 +259,68 @@ if (!$forget && $mikrotikError === '' && $settings['silent_login_enabled'] === '
         <?php endforeach; ?>
         <button type="submit" id="connect-submit">Connect to Wi-Fi</button>
       </form>
+      <?php // iPhones open captive portals in the Captive Network Assistant,
+            // a mini-browser iOS closes on its own once it decides the network
+            // is going nowhere — which, on a form that takes minutes to fill,
+            // it regularly does. Attendees hit by that have no way of knowing
+            // the page is recoverable, so name the escape route. Rendered from
+            // resolve_portal_host() rather than the Host header so it cannot
+            // print back a domain an attacker put in the request. ?>
+      <p class="hint">If this page closes before you finish, open your browser
+        and go to <strong><?= htmlspecialchars(resolve_portal_host()) ?></strong> to carry on.</p>
+      <script>
+      // Keep what has been typed, so a portal that closes mid-form costs the
+      // attendee a reload rather than starting over. Same failure as above:
+      // the window between joining the Wi-Fi and submitting is exactly when
+      // iOS is most likely to tear the page down.
+      (function () {
+        var form = document.getElementById('connect-form');
+        if (!form || !window.localStorage) {
+          return;
+        }
+        var KEY = 'eyif-signup-draft';
+        var fields = ['name', 'phone', 'email', 'lga', 'tech_question'];
+
+        // "Not you?" means a different person is about to use this device, so
+        // the previous one's name, phone and email must not be sitting in the
+        // boxes waiting for them. Clearing here matters more than it looks:
+        // this is the one flow where a SHARED phone or laptop is expected.
+        if (location.search.indexOf('forget=1') !== -1) {
+          try { localStorage.removeItem(KEY); } catch (e) {}
+          return;
+        }
+
+        try {
+          var saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+          fields.forEach(function (n) {
+            var el = form.elements[n];
+            if (el && !el.value && typeof saved[n] === 'string') {
+              el.value = saved[n];
+            }
+          });
+        } catch (e) {
+          // A corrupt or unreadable draft is not worth breaking the form over.
+        }
+
+        var save = function () {
+          var data = {};
+          fields.forEach(function (n) {
+            var el = form.elements[n];
+            if (el) {
+              data[n] = el.value;
+            }
+          });
+          try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {}
+        };
+
+        form.addEventListener('input', save);
+        // Submitted means captured server-side; keeping the draft past that
+        // point only risks showing it to whoever uses the device next.
+        form.addEventListener('submit', function () {
+          try { localStorage.removeItem(KEY); } catch (e) {}
+        });
+      })();
+      </script>
     </div>
   </div>
   <?php endif; ?>
